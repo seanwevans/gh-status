@@ -9,6 +9,8 @@ repositories for the provided GitHub usernames and displays the latest workflow
 run status using emoji icons. The site is automatically deployed to GitHub
 Pages via the included workflow.
 
+If a username is invalid, the page lists a warning like `⚠️ Username octocat not found`.
+
 ## Terminal version
 
 The `ghstatus.c` program renders the build monitor in a terminal using

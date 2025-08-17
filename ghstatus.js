@@ -40,6 +40,10 @@ async function fetchRepos(user) {
         error = "rate_limit";
         break;
       }
+      if (resp.status === 404) {
+        error = "not_found";
+        break;
+      }
       if (!resp.ok) {
         error = "error";
         break;
@@ -105,7 +109,7 @@ async function load() {
       r.status === "rejected" ||
       (r.status === "fulfilled" &&
         r.value.error &&
-        r.value.error !== "rate_limit"),
+        !["rate_limit", "not_found"].includes(r.value.error)),
   );
   const repoLists = repoResults.map((r) =>
     r.status === "fulfilled" ? r.value : { names: [], error: "error" },
@@ -116,20 +120,30 @@ async function load() {
     return;
   }
 
-  if (repoFetchFailed) {
-    const failedUsers = repoLists
-      .map((r, index) =>
-        r.error && r.error !== "rate_limit" ? users[index] : null,
-      )
-      .filter(Boolean);
-    const li = document.createElement("li");
-    li.textContent = `⚠️ Error fetching repositories for: ${failedUsers.join(
-      ", ",
-    )}`;
-    list.appendChild(li);
+  const failedUsers = repoLists
+    .map((r, index) =>
+      r.error && !["rate_limit", "not_found"].includes(r.error)
+        ? users[index]
+        : null,
+    )
+    .filter(Boolean);
+  const notFoundUsers = repoLists
+    .map((r, index) => (r.error === "not_found" ? users[index] : null))
+    .filter(Boolean);
 
-    if (failedUsers.length === users.length) return;
+  if (repoFetchFailed) {
+    const li = document.createElement("li");
+    li.textContent = `⚠️ Error fetching repositories for: ${failedUsers.join(", ")}`;
+    list.appendChild(li);
   }
+
+  for (const user of notFoundUsers) {
+    const li = document.createElement("li");
+    li.textContent = `⚠️ Username ${user} not found`;
+    list.appendChild(li);
+  }
+
+  if (failedUsers.length + notFoundUsers.length === users.length) return;
 
   const repos = repoLists.filter((r) => !r.error).flatMap((r) => r.names);
 
