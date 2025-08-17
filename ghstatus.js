@@ -65,3 +65,10 @@ async function load() {
 }
 
 document.getElementById("load").addEventListener("click", load);
+document
+  .getElementById("users")
+  .addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      load();
+    }
+  });
