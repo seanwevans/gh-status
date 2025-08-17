@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
+#include <signal.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -59,7 +60,8 @@ void load_repos(const char *user) {
     }
 
     execlp("gh", "gh", "repo", "list", user, "--public", "--limit", "500",
-           "--json", "nameWithOwner", "--jq", ".[].nameWithOwner", (char *)NULL);
+           "--json", "nameWithOwner", "--jq", ".[].nameWithOwner",
+           (char *)NULL);
     _exit(1); // exec failed
   }
 
@@ -155,13 +157,15 @@ void spawn_fetches(int pipes[][2], pid_t pids[]) {
       dup2(pipes[i][1], STDOUT_FILENO);
       close(pipes[i][0]);
       close(pipes[i][1]);
+      int devnull = open("/dev/null", O_WRONLY);
+      if (devnull >= 0) {
+        dup2(devnull, STDERR_FILENO);
+        close(devnull);
+      }
 
-      char cmd[512];
-      snprintf(cmd, sizeof(cmd),
-               "gh run list -L 1 -R %s --json status,conclusion "
-               "--jq '.[0] | \"\\(.status) \\(.conclusion)\"' 2>/dev/null",
-               REPOS[i]);
-      execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
+      execlp("gh", "gh", "run", "list", "-L", "1", "-R", REPOS[i], "--json",
+             "status,conclusion", "--jq",
+             ".[0] | \"\\(.status) \\(.conclusion)\"", (char *)NULL);
       _exit(1);
     } else if (pid > 0) {
       pids[i] = pid;
@@ -172,6 +176,20 @@ void spawn_fetches(int pipes[][2], pid_t pids[]) {
       close(pipes[i][0]);
       close(pipes[i][1]);
       pipes[i][0] = pipes[i][1] = -1;
+    }
+  }
+}
+
+void cleanup(int pipes[][2], pid_t pids[]) {
+  for (int i = 0; i < NUM_REPOS; i++) {
+    free(REPOS[i]);
+    if (pipes[i][0] != -1)
+      close(pipes[i][0]);
+    if (pipes[i][1] != -1)
+      close(pipes[i][1]);
+    if (pids[i] > 0) {
+      kill(pids[i], SIGTERM);
+      waitpid(pids[i], NULL, 0);
     }
   }
 }
@@ -430,7 +448,6 @@ int main(int argc, char **argv) {
 
     refresh();
 
-
     if (time(NULL) - last_poll >= POLL_INTERVAL_S) {
       spawn_fetches(pipes, fetch_pids);
       last_poll = time(NULL);
@@ -483,6 +500,7 @@ int main(int argc, char **argv) {
     }
   }
 
+  cleanup(pipes, fetch_pids);
   endwin();
   return 0;
 }

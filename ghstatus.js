@@ -9,14 +9,17 @@ const statusIcons = {
   stale: "🥖",
   in_progress: "🔁",
   queued: "📋",
+  no_runs: "➖",
+  completed: "➖",
   loading: "🌀",
   error: "⚠️",
   default: "➖",
 };
 
 function iconFor(status) {
-  for (const key in statusIcons) {
-    if (status.includes(key)) return statusIcons[key];
+  if (!status) return statusIcons.default;
+  for (const [key, icon] of Object.entries(statusIcons)) {
+    if (key !== "default" && status.includes(key)) return icon;
   }
   return statusIcons.default;
 }
@@ -53,7 +56,7 @@ async function fetchStatus(repo) {
     const data = await resp.json();
     if (data.workflow_runs.length === 0) return "no_runs";
     const run = data.workflow_runs[0];
-    return `${run.status} ${run.conclusion}`;
+    return run.conclusion ? `${run.status} ${run.conclusion}` : run.status;
   } catch (err) {
     console.error("Failed to fetch status:", err);
     return "error";
@@ -96,10 +99,8 @@ async function load() {
 }
 
 document.getElementById("load").addEventListener("click", load);
-document
-  .getElementById("users")
-  .addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      load();
-    }
-  });
+document.getElementById("users").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    load();
+  }
+});
