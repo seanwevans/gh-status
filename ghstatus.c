@@ -28,6 +28,22 @@ int NUM_REPOS = 0;
 char STATUS[MAX_REPOS][64];
 const wchar_t spinner_chars[] = L"🌑🌒🌓🌔🌕🌖🌗🌘";
 
+struct {
+  const char *match;
+  const wchar_t *icon;
+  int color;
+} status_map[] = {
+    {"success", L"✅", 1},         {"failure", L"❌", 2},
+    {"timed_out", L"⌛", 2},       {"cancelled", L"🛑", 4},
+    {"skipped", L"⏭️", 5},          {"in_progress", L"🔁", 7},
+    {"action_required", L"⛔", 6}, {"neutral", L"⭕", 3},
+    {"stale", L"🥖", 4},           {"queued", L"📋", 3},
+    {"loading", L"🌀", 3},         {NULL, L"➖", 3},
+};
+
+#define STATUS_COUNT (sizeof(status_map) / sizeof(status_map[0]))
+#define STATUS_KNOWN (STATUS_COUNT - 1)
+
 typedef enum { SORT_DEFAULT, SORT_ALPHA, SORT_STATUS } SortMode;
 SortMode sort_mode = SORT_DEFAULT;
 
@@ -102,45 +118,19 @@ void load_repos(const char *user) {
 }
 
 const wchar_t *status_icon(const char *status) {
-  if (strstr(status, "success"))
-    return L"✅";
-  if (strstr(status, "failure"))
-    return L"❌";
-  if (strstr(status, "cancelled"))
-    return L"🛑";
-  if (strstr(status, "skipped"))
-    return L"⏭️";
-  if (strstr(status, "timed_out"))
-    return L"⌛";
-  if (strstr(status, "action_required"))
-    return L"⛔";
-  if (strstr(status, "neutral"))
-    return L"⭕";
-  if (strstr(status, "stale"))
-    return L"🥖";
-  if (strstr(status, "in_progress"))
-    return L"🔁";
-  if (strstr(status, "queued"))
-    return L"📋";
-  if (strstr(status, "loading"))
-    return L"🌀";
-  return L"➖"; // fallback
+  for (size_t i = 0; i < STATUS_KNOWN; i++) {
+    if (strstr(status, status_map[i].match))
+      return status_map[i].icon;
+  }
+  return status_map[STATUS_KNOWN].icon;
 }
 
 int status_color(const char *status) {
-  if (strstr(status, "success"))
-    return 1;
-  if (strstr(status, "failure") || strstr(status, "timed_out"))
-    return 2;
-  if (strstr(status, "cancelled") || strstr(status, "stale"))
-    return 4;
-  if (strstr(status, "skipped"))
-    return 5;
-  if (strstr(status, "action_required"))
-    return 6;
-  if (strstr(status, "in_progress"))
-    return 7;
-  return 3;
+  for (size_t i = 0; i < STATUS_KNOWN; i++) {
+    if (strstr(status, status_map[i].match))
+      return status_map[i].color;
+  }
+  return status_map[STATUS_KNOWN].color;
 }
 
 void spawn_fetches(int pipes[][2], pid_t pids[], int max_concurrent_fetches) {
@@ -433,47 +423,30 @@ int main(int argc, char **argv) {
     }
 
     // stats
-    int count_success = 0, count_fail = 0, count_timeout = 0, count_cancel = 0,
-        count_skipped = 0, count_progress = 0, count_action = 0,
-        count_neutral = 0, count_stale = 0, count_queued = 0, count_loading = 0,
-        count_other = 0;
-
+    int counts[STATUS_COUNT] = {0};
     for (int i = 0; i < NUM_REPOS; i++) {
-      if (strstr(STATUS[i], "success"))
-        count_success++;
-      else if (strstr(STATUS[i], "failure"))
-        count_fail++;
-      else if (strstr(STATUS[i], "timed_out"))
-        count_timeout++;
-      else if (strstr(STATUS[i], "cancelled"))
-        count_cancel++;
-      else if (strstr(STATUS[i], "skipped"))
-        count_skipped++;
-      else if (strstr(STATUS[i], "in_progress"))
-        count_progress++;
-      else if (strstr(STATUS[i], "action_required"))
-        count_action++;
-      else if (strstr(STATUS[i], "neutral"))
-        count_neutral++;
-      else if (strstr(STATUS[i], "stale"))
-        count_stale++;
-      else if (strstr(STATUS[i], "queued"))
-        count_queued++;
-      else if (strstr(STATUS[i], "loading"))
-        count_loading++;
-      else
-        count_other++;
+      int matched = 0;
+      for (size_t j = 0; j < STATUS_KNOWN; j++) {
+        if (strstr(STATUS[i], status_map[j].match)) {
+          counts[j]++;
+          matched = 1;
+          break;
+        }
+      }
+      if (!matched)
+        counts[STATUS_KNOWN]++;
     }
     const char *sort_label = (sort_mode == SORT_DEFAULT) ? "Default"
                              : (sort_mode == SORT_ALPHA) ? "Alphabetical"
                                                          : "Status";
 
-    mvprintw(
-        term_rows - 2, 0,
-        "📦%d 👥%d ✅%d ❌%d ⏳%d 🛑%d ⏭️%d 🔁%d ⛔%d ⭕%d 🥖%d 📋%d 🌀%d ➖%d",
-        NUM_REPOS, num_users, count_success, count_fail, count_timeout,
-        count_cancel, count_skipped, count_progress, count_action,
-        count_neutral, count_stale, count_queued, count_loading, count_other);
+    mvprintw(term_rows - 2, 0, "📦%d 👥%d", NUM_REPOS, num_users);
+    int stats_col = getcurx(stdscr);
+    for (size_t j = 0; j < STATUS_COUNT; j++) {
+      mvprintw(term_rows - 2, stats_col, " %ls%d", status_map[j].icon,
+               counts[j]);
+      stats_col = getcurx(stdscr);
+    }
 
     // --- footer buttons ---
     move(term_rows - 1, 0);
