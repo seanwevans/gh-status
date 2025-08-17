@@ -9,18 +9,18 @@
 #include <fcntl.h>
 #include <locale.h>
 #include <ncursesw/ncurses.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
-#include <signal.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 #include <wchar.h>
 
 #define MAX_REPOS 2048
-#define POLL_INTERVAL_S 300  // seconds between full refresh
-#define SPIN_INTERVAL_MS 125 // ms between spinner frame changes
+#define POLL_INTERVAL_S 300       // seconds between full refresh
+#define SPIN_INTERVAL_MS 125      // ms between spinner frame changes
 #define MAX_CONCURRENT_FETCHES 32 // max number of simultaneous fetches
 
 char *REPOS[MAX_REPOS];
