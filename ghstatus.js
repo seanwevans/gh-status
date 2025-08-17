@@ -16,6 +16,36 @@ const statusIcons = {
   default: "➖",
 };
 
+// Maximum number of concurrent status requests. Adjust via console for testing.
+let CONCURRENCY_LIMIT = window.CONCURRENCY_LIMIT || 5;
+window.CONCURRENCY_LIMIT = CONCURRENCY_LIMIT;
+
+// A tiny concurrency limiter similar to p-limit. It ensures that at most
+// `limit` async operations are running at any given time.
+function limitConcurrency(limit) {
+  let active = 0;
+  const queue = [];
+
+  const next = () => {
+    if (queue.length === 0 || active >= limit) return;
+    active++;
+    const { fn, resolve, reject } = queue.shift();
+    fn()
+      .then(resolve, reject)
+      .finally(() => {
+        active--;
+        next();
+      });
+  };
+
+  return function run(fn) {
+    return new Promise((resolve, reject) => {
+      queue.push({ fn, resolve, reject });
+      next();
+    });
+  };
+}
+
 function iconFor(status) {
   if (!status) return statusIcons.default;
   for (const [key, icon] of Object.entries(statusIcons)) {
@@ -144,12 +174,13 @@ async function load() {
     return;
   }
 
+  const limiter = limitConcurrency(CONCURRENCY_LIMIT);
   for (const repo of repos) {
     const li = document.createElement("li");
     li.textContent = `${repo} - loading`;
     list.appendChild(li);
 
-    fetchStatus(repo).then((status) => {
+    limiter(() => fetchStatus(repo)).then((status) => {
       if (status === "rate_limit") {
         li.textContent = `⚠️ ${repo} - rate limit exceeded`;
         return;
