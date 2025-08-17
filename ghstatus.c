@@ -34,6 +34,9 @@ SortMode sort_mode = SORT_DEFAULT;
 int ORIGINAL_INDEX[MAX_REPOS]; // for restoring original order
 int order[MAX_REPOS];          // active display order
 
+int pipes[MAX_REPOS][2];
+pid_t fetch_pids[MAX_REPOS];
+
 // button hover state
 int hover_x = -1, hover_y = -1;
 
@@ -214,6 +217,13 @@ void cleanup(int pipes[][2], pid_t pids[]) {
   }
 }
 
+void handle_sigint(int signo) {
+  (void)signo;
+  cleanup(pipes, fetch_pids);
+  endwin();
+  exit(0);
+}
+
 long long now_ms(void) {
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -264,8 +274,6 @@ int main(int argc, char **argv) {
     order[i] = i;
   }
 
-  int pipes[MAX_REPOS][2];
-  pid_t fetch_pids[MAX_REPOS];
   for (int i = 0; i < MAX_REPOS; i++) {
     pipes[i][0] = pipes[i][1] = -1;
     fetch_pids[i] = -1;
@@ -300,6 +308,9 @@ int main(int argc, char **argv) {
   init_pair(5, COLOR_BLUE, COLOR_GREEN);   // skipped
   init_pair(6, COLOR_RED, COLOR_YELLOW);   // action_required
   init_pair(7, COLOR_WHITE, COLOR_BLUE);   // in_progress
+
+  signal(SIGINT, handle_sigint);
+  signal(SIGTERM, handle_sigint);
 
   int ch;
   time_t last_poll = time(NULL);
