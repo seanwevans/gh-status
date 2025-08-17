@@ -22,17 +22,19 @@ function iconFor(status) {
 }
 
 async function fetchRepos(user) {
-  try {
-    const resp = await fetch(
-      `https://api.github.com/users/${user}/repos?per_page=100&type=public`,
-    );
-    if (!resp.ok) return [];
-    const data = await resp.json();
-    return data.map((r) => r.full_name);
-  } catch (err) {
-    console.error("Failed to fetch repos:", err);
-    return [];
+  const repos = [];
+  for (let page = 1; ; page += 1) {
+      try {
+        const resp = await fetch(`https://api.github.com/users/${user}/repos?per_page=100&type=public&page=${page}`);
+        if (!resp.ok) break;
+        const data = await resp.json();
+        repos.push(...data);
+        if (data.length < 100) break;
+    } catch (err) {
+      console.error("Failed to fetch repos:", err);      
+    }
   }
+  return repos.map((r) => r.full_name);
 }
 
 async function fetchStatus(repo) {
@@ -81,3 +83,10 @@ async function load() {
 }
 
 document.getElementById("load").addEventListener("click", load);
+document
+  .getElementById("users")
+  .addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      load();
+    }
+  });
