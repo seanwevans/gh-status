@@ -53,8 +53,7 @@ async function fetchRepos(user) {
     }
   }
   const repoNames = repos.map((r) => r.full_name);
-  if (error) repoNames.error = error;
-  return repoNames;
+  return { names: repoNames, error: errorOccurred };
 }
 
 async function fetchStatus(repo) {
@@ -85,6 +84,7 @@ async function load() {
   list.innerHTML = "";
 
   const repoLists = await Promise.all(users.map(fetchRepos));
+
   const rateLimited = repoLists.some((r) => r.error === "rate_limit");
   const repoFetchFailed = repoLists.some(
     (r) => r.error && r.error !== "rate_limit",
