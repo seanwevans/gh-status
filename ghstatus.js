@@ -92,10 +92,11 @@ async function load() {
     r.status === "fulfilled" ? r.value : { names: [], error: "error" },
   );
 
-  const rateLimited = results.some(
+  // Determine if any repository fetch requests hit the rate limit or failed
+  const rateLimited = repoResults.some(
     (r) => r.status === "fulfilled" && r.value.error === "rate_limit",
   );
-  const repoFetchFailed = results.some(
+  const repoFetchFailed = repoResults.some(
     (r) =>
       r.status === "rejected" ||
       (r.status === "fulfilled" &&
@@ -109,23 +110,21 @@ async function load() {
   }
 
   if (repoFetchFailed) {
-
     const failedUsers = repoLists
       .map((r, index) =>
         r.error && r.error !== "rate_limit" ? users[index] : null,
       )
       .filter(Boolean);
     const li = document.createElement("li");
-    li.textContent = `⚠️ Error fetching repositories for: ${failedUsers.join(", ")}`;
+    li.textContent = `⚠️ Error fetching repositories for: ${failedUsers.join(
+      ", ",
+    )}`;
     list.appendChild(li);
 
     if (failedUsers.length === users.length) return;
   }
 
-  const repos = repoLists
-    .filter((r) => !r.error)
-    .flatMap((r) => r.names);
-
+  const repos = repoLists.filter((r) => !r.error).flatMap((r) => r.names);
 
   if (repos.length === 0) {
     if (list.children.length === 0) {
