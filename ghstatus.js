@@ -51,9 +51,10 @@ async function fetchRepos(user) {
       console.error("Failed to fetch repos:", err);
       error = "error";
       break;
-   }
+    }
+  }
   const repoNames = repos.map((r) => r.full_name);
-  return { names: repoNames, error: errorOccurred };
+  return { names: repoNames, error };
 }
 
 async function fetchStatus(repo) {
