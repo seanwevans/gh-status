@@ -92,9 +92,15 @@ async function load() {
     r.status === "fulfilled" ? r.value : { names: [], error: "error" },
   );
 
-  const rateLimited = repoLists.some((r) => r.error === "rate_limit");
-  const repoFetchFailed = repoLists.some(
-    (r) => r.error && r.error !== "rate_limit",
+  const rateLimited = results.some(
+    (r) => r.status === "fulfilled" && r.value.error === "rate_limit",
+  );
+  const repoFetchFailed = results.some(
+    (r) =>
+      r.status === "rejected" ||
+      (r.status === "fulfilled" &&
+        r.value.error &&
+        r.value.error !== "rate_limit"),
   );
 
   if (rateLimited) {
@@ -103,6 +109,7 @@ async function load() {
   }
 
   if (repoFetchFailed) {
+
     const failedUsers = repoLists
       .map((r, index) =>
         r.error && r.error !== "rate_limit" ? users[index] : null,
@@ -118,6 +125,7 @@ async function load() {
   const repos = repoLists
     .filter((r) => !r.error)
     .flatMap((r) => r.names);
+
 
   if (repos.length === 0) {
     if (list.children.length === 0) {
