@@ -96,13 +96,28 @@ int status_color(const char *status) {
   return 3;
 }
 
-void spawn_fetches(int pipes[][2]) {
+void spawn_fetches(int pipes[][2], pid_t pids[]) {
   for (int i = 0; i < NUM_REPOS; i++) {
-    if (pipe(pipes[i]) == -1)
+    if (pipes[i][0] != -1) {
+      close(pipes[i][0]);
+      pipes[i][0] = -1;
+    }
+    if (pipes[i][1] != -1) {
+      close(pipes[i][1]);
+      pipes[i][1] = -1;
+    }
+    if (pids[i] > 0) {
+      waitpid(pids[i], NULL, 0);
+      pids[i] = -1;
+    }
+
+    if (pipe(pipes[i]) == -1) {
+      pipes[i][0] = pipes[i][1] = -1;
       continue;
+    }
 
     pid_t pid = fork();
-    if (pid == 0) { // child
+    if (pid == 0) {
       dup2(pipes[i][1], STDOUT_FILENO);
       close(pipes[i][0]);
       close(pipes[i][1]);
@@ -115,9 +130,14 @@ void spawn_fetches(int pipes[][2]) {
       execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
       _exit(1);
     } else if (pid > 0) {
-      close(pipes[i][1]);                      // parent reads
-      fcntl(pipes[i][0], F_SETFL, O_NONBLOCK); // non-blocking read
+      pids[i] = pid;
+      close(pipes[i][1]);
+      fcntl(pipes[i][0], F_SETFL, O_NONBLOCK);
       strcpy(STATUS[i], "loading");
+    } else {
+      close(pipes[i][0]);
+      close(pipes[i][1]);
+      pipes[i][0] = pipes[i][1] = -1;
     }
   }
 }
@@ -173,7 +193,12 @@ int main(int argc, char **argv) {
   }
 
   int pipes[MAX_REPOS][2];
-  spawn_fetches(pipes);
+  pid_t fetch_pids[MAX_REPOS];
+  for (int i = 0; i < MAX_REPOS; i++) {
+    pipes[i][0] = pipes[i][1] = -1;
+    fetch_pids[i] = -1;
+  }
+  spawn_fetches(pipes, fetch_pids);
 
   setlocale(LC_CTYPE, "C.UTF-8");
   initscr();
@@ -243,21 +268,28 @@ int main(int argc, char **argv) {
     FD_ZERO(&readfds);
     int maxfd = -1;
     for (int i = 0; i < NUM_REPOS; i++) {
-      FD_SET(pipes[i][0], &readfds);
-      if (pipes[i][0] > maxfd)
-        maxfd = pipes[i][0];
+      if (pipes[i][0] != -1) {
+        FD_SET(pipes[i][0], &readfds);
+        if (pipes[i][0] > maxfd)
+          maxfd = pipes[i][0];
+      }
     }
     struct timeval tv = {0, 100000}; // 100ms
     select(maxfd + 1, &readfds, NULL, NULL, &tv);
 
     for (int i = 0; i < NUM_REPOS; i++) {
-      if (FD_ISSET(pipes[i][0], &readfds)) {
+      if (pipes[i][0] != -1 && FD_ISSET(pipes[i][0], &readfds)) {
         char buf[128];
         int n = read(pipes[i][0], buf, sizeof(buf) - 1);
         if (n > 0) {
           buf[n] = '\0';
           buf[strcspn(buf, "\n")] = 0;
           strncpy(STATUS[i], buf, sizeof(STATUS[i]) - 1);
+        } else if (n == 0) {
+          close(pipes[i][0]);
+          waitpid(fetch_pids[i], NULL, 0);
+          pipes[i][0] = -1;
+          fetch_pids[i] = -1;
         }
       }
     }
@@ -364,8 +396,9 @@ int main(int argc, char **argv) {
 
     refresh();
 
+
     if (time(NULL) - last_poll >= POLL_INTERVAL_S) {
-      spawn_fetches(pipes);
+      spawn_fetches(pipes, fetch_pids);
       last_poll = time(NULL);
     }
 
@@ -373,7 +406,7 @@ int main(int argc, char **argv) {
     if (ch == 'q' || ch == 'Q')
       break;
     if (ch == ' ' && time(NULL) - last_poll >= 1) {
-      spawn_fetches(pipes);
+      spawn_fetches(pipes, fetch_pids);
       last_poll = time(NULL);
     }
     if (ch == 's' || ch == 'S') {
@@ -398,7 +431,7 @@ int main(int argc, char **argv) {
               break; // clicked [q]
             } else if (ev.x >= sp_col_start && ev.x <= sp_col_end) {
               if (time(NULL) - last_poll >= 1) {
-                spawn_fetches(pipes);
+                spawn_fetches(pipes, fetch_pids);
                 last_poll = time(NULL);
               }
             } else if (ev.x >= s_col_start && ev.x <= s_col_end) {
