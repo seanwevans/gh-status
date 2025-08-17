@@ -26,6 +26,7 @@ function iconFor(status) {
 
 async function fetchRepos(user) {
   const repos = [];
+  let errorOccurred = false;
   for (let page = 1; ; page += 1) {
     try {
       const resp = await fetch(
@@ -37,9 +38,13 @@ async function fetchRepos(user) {
       if (data.length < 100) break;
     } catch (err) {
       console.error("Failed to fetch repos:", err);
+      errorOccurred = true;
+      break;
     }
   }
-  return repos.map((r) => r.full_name);
+  const repoNames = repos.map((r) => r.full_name);
+  if (errorOccurred) repoNames.error = true;
+  return repoNames;
 }
 
 async function fetchStatus(repo) {
@@ -64,11 +69,17 @@ async function load() {
   const list = document.getElementById("results");
   list.innerHTML = "";
 
-  const repos = (await Promise.all(users.map(fetchRepos))).flat();
+  const repoLists = await Promise.all(users.map(fetchRepos));
+  const repoFetchFailed = repoLists.some((r) => r.error);
+  const repos = repoLists.flat();
+
+  if (repoFetchFailed) {
+    list.innerHTML = "<li>⚠️ Error fetching repositories</li>";
+    return;
+  }
 
   if (repos.length === 0) {
-    list.innerHTML =
-      "<li>No repositories found or error fetching repositories</li>";
+    list.innerHTML = "<li>No repositories found</li>";
     return;
   }
 
