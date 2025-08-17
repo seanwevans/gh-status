@@ -87,10 +87,14 @@ async function load() {
   const list = document.getElementById("results");
   list.innerHTML = "";
 
-  const repoResults = await Promise.allSettled(users.map(fetchRepos));
-  const repoLists = repoResults.map((r) =>
-    r.status === "fulfilled" ? r.value : { names: [], error: "error" },
-  );
+  let repoLists;
+  try {
+    repoLists = await Promise.all(users.map(fetchRepos));
+  } catch (err) {
+    console.error("Failed to load repositories:", err);
+    list.innerHTML = "<li>⚠️ Error loading repositories</li>";
+    return;
+  }
 
   const rateLimited = results.some(
     (r) => r.status === "fulfilled" && r.value.error === "rate_limit",
