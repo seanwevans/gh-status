@@ -21,6 +21,7 @@
 #define MAX_REPOS 2048
 #define POLL_INTERVAL_S 300  // seconds between full refresh
 #define SPIN_INTERVAL_MS 125 // ms between spinner frame changes
+#define MAX_CONCURRENT_FETCHES 32 // max number of simultaneous fetches
 
 char *REPOS[MAX_REPOS];
 int NUM_REPOS = 0;
@@ -133,6 +134,7 @@ int status_color(const char *status) {
 }
 
 void spawn_fetches(int pipes[][2], pid_t pids[]) {
+  // tear down any previous fetches
   for (int i = 0; i < NUM_REPOS; i++) {
     if (pipes[i][0] != -1) {
       close(pipes[i][0]);
@@ -145,6 +147,23 @@ void spawn_fetches(int pipes[][2], pid_t pids[]) {
     if (pids[i] > 0) {
       waitpid(pids[i], NULL, 0);
       pids[i] = -1;
+    }
+  }
+
+  int running = 0; // currently active children
+  for (int i = 0; i < NUM_REPOS; i++) {
+    while (running >= MAX_CONCURRENT_FETCHES) {
+      int status;
+      pid_t done = wait(&status);
+      if (done <= 0)
+        break;
+      running--;
+      for (int j = 0; j < NUM_REPOS; j++) {
+        if (pids[j] == done) {
+          pids[j] = -1;
+          break;
+        }
+      }
     }
 
     if (pipe(pipes[i]) == -1) {
@@ -172,6 +191,7 @@ void spawn_fetches(int pipes[][2], pid_t pids[]) {
       close(pipes[i][1]);
       fcntl(pipes[i][0], F_SETFL, O_NONBLOCK);
       strcpy(STATUS[i], "loading");
+      running++;
     } else {
       close(pipes[i][0]);
       close(pipes[i][1]);
@@ -339,7 +359,8 @@ int main(int argc, char **argv) {
           strncpy(STATUS[i], buf, sizeof(STATUS[i]) - 1);
         } else if (n == 0) {
           close(pipes[i][0]);
-          waitpid(fetch_pids[i], NULL, 0);
+          if (fetch_pids[i] > 0)
+            waitpid(fetch_pids[i], NULL, 0);
           pipes[i][0] = -1;
           fetch_pids[i] = -1;
         }
