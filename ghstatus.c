@@ -1,6 +1,6 @@
 /*
  GitHub Actions Build Monitor
-   usage: ghstatus user1 [user2 [user3 [...]]]
+   usage: ghstatus [-p seconds] [-c count] user1 [user2 [user3 [...]]]
    build: gcc ghstatus.c -o ghstatus -lncursesw
 */
 
@@ -9,18 +9,18 @@
 #include <fcntl.h>
 #include <locale.h>
 #include <ncursesw/ncurses.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
-#include <signal.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 #include <wchar.h>
 
 #define MAX_REPOS 2048
-#define POLL_INTERVAL_S 300  // seconds between full refresh
-#define SPIN_INTERVAL_MS 125 // ms between spinner frame changes
+#define POLL_INTERVAL_S 300       // seconds between full refresh
+#define SPIN_INTERVAL_MS 125      // ms between spinner frame changes
 #define MAX_CONCURRENT_FETCHES 32 // max number of simultaneous fetches
 
 char *REPOS[MAX_REPOS];
@@ -136,7 +136,7 @@ int status_color(const char *status) {
   return 3;
 }
 
-void spawn_fetches(int pipes[][2], pid_t pids[]) {
+void spawn_fetches(int pipes[][2], pid_t pids[], int max_concurrent_fetches) {
   // tear down any previous fetches
   for (int i = 0; i < NUM_REPOS; i++) {
     if (pipes[i][0] != -1) {
@@ -155,7 +155,7 @@ void spawn_fetches(int pipes[][2], pid_t pids[]) {
 
   int running = 0; // currently active children
   for (int i = 0; i < NUM_REPOS; i++) {
-    while (running >= MAX_CONCURRENT_FETCHES) {
+    while (running >= max_concurrent_fetches) {
       int status;
       pid_t done = wait(&status);
       if (done <= 0)
@@ -255,14 +255,39 @@ void apply_sort(void) {
 }
 
 int main(int argc, char **argv) {
-  if (argc < 2) {
-    fprintf(stderr, "Usage: %s <github-username> [user2 [user3 [...]]]\n",
+  int poll_interval_s = POLL_INTERVAL_S;
+  int max_concurrent_fetches = MAX_CONCURRENT_FETCHES;
+  int opt;
+
+  while ((opt = getopt(argc, argv, "hp:c:")) != -1) {
+    switch (opt) {
+    case 'p':
+      poll_interval_s = atoi(optarg);
+      break;
+    case 'c':
+      max_concurrent_fetches = atoi(optarg);
+      break;
+    case 'h':
+    default:
+      fprintf(stderr,
+              "Usage: %s [-p seconds] [-c count] <github-username> [user2 "
+              "[user3 [...]]]\n",
+              argv[0]);
+      return 0;
+    }
+  }
+
+  if (optind >= argc) {
+    fprintf(stderr,
+            "Usage: %s [-p seconds] [-c count] <github-username> [user2 [user3 "
+            "[...]]]\n",
             argv[0]);
     return 0;
   }
 
-  for (int i = 1; i < argc; i++)
+  for (int i = optind; i < argc; i++)
     load_repos(argv[i]);
+  int num_users = argc - optind;
 
   if (NUM_REPOS == 0) {
     fprintf(stderr, "No repos found for specified users, exiting...\n");
@@ -278,7 +303,7 @@ int main(int argc, char **argv) {
     pipes[i][0] = pipes[i][1] = -1;
     fetch_pids[i] = -1;
   }
-  spawn_fetches(pipes, fetch_pids);
+  spawn_fetches(pipes, fetch_pids, max_concurrent_fetches);
 
   setlocale(LC_CTYPE, "C.UTF-8");
   initscr();
@@ -333,7 +358,7 @@ int main(int argc, char **argv) {
       last_spin_update = now;
     }
 
-    int secs_left = POLL_INTERVAL_S - (int)(time(NULL) - last_poll);
+    int secs_left = poll_interval_s - (int)(time(NULL) - last_poll);
     if (secs_left < 0)
       secs_left = 0;
 
@@ -432,7 +457,7 @@ int main(int argc, char **argv) {
     mvprintw(
         term_rows - 2, 0,
         "📦%d 👥%d ✅%d ❌%d ⏳%d 🛑%d ⏭️%d 🔁%d ⛔%d ⭕%d 🥖%d 📋%d 🌀%d ➖%d",
-        NUM_REPOS, argc - 1, count_success, count_fail, count_timeout,
+        NUM_REPOS, num_users, count_success, count_fail, count_timeout,
         count_cancel, count_skipped, count_progress, count_action,
         count_neutral, count_stale, count_queued, count_loading, count_other);
 
@@ -481,8 +506,8 @@ int main(int argc, char **argv) {
 
     refresh();
 
-    if (time(NULL) - last_poll >= POLL_INTERVAL_S) {
-      spawn_fetches(pipes, fetch_pids);
+    if (time(NULL) - last_poll >= poll_interval_s) {
+      spawn_fetches(pipes, fetch_pids, max_concurrent_fetches);
       last_poll = time(NULL);
     }
 
@@ -490,7 +515,7 @@ int main(int argc, char **argv) {
     if (ch == 'q' || ch == 'Q')
       break;
     if (ch == ' ' && time(NULL) - last_poll >= 1) {
-      spawn_fetches(pipes, fetch_pids);
+      spawn_fetches(pipes, fetch_pids, max_concurrent_fetches);
       last_poll = time(NULL);
     }
     if (ch == 's' || ch == 'S') {
@@ -515,7 +540,7 @@ int main(int argc, char **argv) {
               break; // clicked [q]
             } else if (ev.x >= sp_col_start && ev.x <= sp_col_end) {
               if (time(NULL) - last_poll >= 1) {
-                spawn_fetches(pipes, fetch_pids);
+                spawn_fetches(pipes, fetch_pids, max_concurrent_fetches);
                 last_poll = time(NULL);
               }
             } else if (ev.x >= s_col_start && ev.x <= s_col_end) {
