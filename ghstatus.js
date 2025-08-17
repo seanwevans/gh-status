@@ -51,11 +51,7 @@ async function fetchRepos(user) {
       console.error("Failed to fetch repos:", err);
       error = "error";
       break;
-   } catch (err) {
-    console.error("Failed to fetch repos:", err);
-    throw err;
    }
-
   const repoNames = repos.map((r) => r.full_name);
   return { names: repoNames, error: errorOccurred };
 }
