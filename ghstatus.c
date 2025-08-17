@@ -49,6 +49,7 @@ void load_repos(const char *user) {
   if (pid == -1) {
     close(fds[0]);
     close(fds[1]);
+    fprintf(stderr, "Failed to fork 'gh'. GitHub CLI is required.\n");
     return;
   }
 
@@ -57,6 +58,7 @@ void load_repos(const char *user) {
     close(fds[0]);
     close(fds[1]);
 
+    int err = dup(STDERR_FILENO);
     int devnull = open("/dev/null", O_WRONLY);
     if (devnull >= 0) {
       dup2(devnull, STDERR_FILENO);
@@ -66,6 +68,11 @@ void load_repos(const char *user) {
     execlp("gh", "gh", "repo", "list", user, "--public", "--limit", "500",
            "--json", "nameWithOwner", "--jq", ".[].nameWithOwner",
            (char *)NULL);
+    if (err != -1) {
+      dup2(err, STDERR_FILENO);
+      close(err);
+    }
+    fprintf(stderr, "Failed to execute 'gh'. GitHub CLI is required.\n");
     _exit(1); // exec failed
   }
 
@@ -179,6 +186,7 @@ void spawn_fetches(int pipes[][2], pid_t pids[]) {
       dup2(pipes[i][1], STDOUT_FILENO);
       close(pipes[i][0]);
       close(pipes[i][1]);
+      int err = dup(STDERR_FILENO);
       int devnull = open("/dev/null", O_WRONLY);
       if (devnull >= 0) {
         dup2(devnull, STDERR_FILENO);
@@ -188,6 +196,11 @@ void spawn_fetches(int pipes[][2], pid_t pids[]) {
       execlp("gh", "gh", "run", "list", "-L", "1", "-R", REPOS[i], "--json",
              "status,conclusion", "--jq",
              ".[0] | \"\\(.status) \\(.conclusion)\"", (char *)NULL);
+      if (err != -1) {
+        dup2(err, STDERR_FILENO);
+        close(err);
+      }
+      fprintf(stderr, "Failed to execute 'gh'. GitHub CLI is required.\n");
       _exit(1);
     } else if (pid > 0) {
       pids[i] = pid;
@@ -196,6 +209,7 @@ void spawn_fetches(int pipes[][2], pid_t pids[]) {
       strcpy(STATUS[i], "loading");
       running++;
     } else {
+      fprintf(stderr, "Failed to fork 'gh'. GitHub CLI is required.\n");
       close(pipes[i][0]);
       close(pipes[i][1]);
       pipes[i][0] = pipes[i][1] = -1;
