@@ -43,8 +43,7 @@ async function fetchRepos(user) {
     }
   }
   const repoNames = repos.map((r) => r.full_name);
-  if (errorOccurred) repoNames.error = true;
-  return repoNames;
+  return { names: repoNames, error: errorOccurred };
 }
 
 async function fetchStatus(repo) {
@@ -71,7 +70,7 @@ async function load() {
 
   const repoLists = await Promise.all(users.map(fetchRepos));
   const repoFetchFailed = repoLists.some((r) => r.error);
-  const repos = repoLists.flat();
+  const repos = repoLists.flatMap((r) => r.names);
 
   if (repoFetchFailed) {
     list.innerHTML = "<li>⚠️ Error fetching repositories</li>";
