@@ -10,6 +10,7 @@ const statusIcons = {
   in_progress: "🔁",
   queued: "📋",
   loading: "🌀",
+  error: "⚠️",
   default: "➖",
 };
 
@@ -23,26 +24,33 @@ function iconFor(status) {
 async function fetchRepos(user) {
   const repos = [];
   for (let page = 1; ; page += 1) {
-    const resp = await fetch(
-      `https://api.github.com/users/${user}/repos?per_page=100&type=public&page=${page}`,
-    );
-    if (!resp.ok) break;
-    const data = await resp.json();
-    repos.push(...data);
-    if (data.length < 100) break;
+      try {
+        const resp = await fetch(`https://api.github.com/users/${user}/repos?per_page=100&type=public&page=${page}`);
+        if (!resp.ok) break;
+        const data = await resp.json();
+        repos.push(...data);
+        if (data.length < 100) break;
+    } catch (err) {
+      console.error("Failed to fetch repos:", err);      
+    }
   }
   return repos.map((r) => r.full_name);
 }
 
 async function fetchStatus(repo) {
-  const resp = await fetch(
-    `https://api.github.com/repos/${repo}/actions/runs?per_page=1`,
-  );
-  if (!resp.ok) return "unknown";
-  const data = await resp.json();
-  if (data.workflow_runs.length === 0) return "no_runs";
-  const run = data.workflow_runs[0];
-  return `${run.status} ${run.conclusion}`;
+  try {
+    const resp = await fetch(
+      `https://api.github.com/repos/${repo}/actions/runs?per_page=1`,
+    );
+    if (!resp.ok) return "error";
+    const data = await resp.json();
+    if (data.workflow_runs.length === 0) return "no_runs";
+    const run = data.workflow_runs[0];
+    return `${run.status} ${run.conclusion}`;
+  } catch (err) {
+    console.error("Failed to fetch status:", err);
+    return "error";
+  }
 }
 
 async function load() {
@@ -53,11 +61,21 @@ async function load() {
 
   const repos = (await Promise.all(users.map(fetchRepos))).flat();
 
+  if (repos.length === 0) {
+    list.innerHTML =
+      "<li>No repositories found or error fetching repositories</li>";
+    return;
+  }
+
   for (const repo of repos) {
     const li = document.createElement("li");
     li.textContent = `${repo} - loading`;
     list.appendChild(li);
     fetchStatus(repo).then((status) => {
+      if (status === "error") {
+        li.textContent = `⚠️ ${repo} - error fetching status`;
+        return;
+      }
       const icon = iconFor(status);
       li.textContent = `${icon} ${repo} - ${status}`;
     });
