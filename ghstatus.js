@@ -21,12 +21,17 @@ function iconFor(status) {
 }
 
 async function fetchRepos(user) {
-  const resp = await fetch(
-    `https://api.github.com/users/${user}/repos?per_page=100&type=public`,
-  );
-  if (!resp.ok) return [];
-  const data = await resp.json();
-  return data.map((r) => r.full_name);
+  const repos = [];
+  for (let page = 1; ; page += 1) {
+    const resp = await fetch(
+      `https://api.github.com/users/${user}/repos?per_page=100&type=public&page=${page}`,
+    );
+    if (!resp.ok) break;
+    const data = await resp.json();
+    repos.push(...data);
+    if (data.length < 100) break;
+  }
+  return repos.map((r) => r.full_name);
 }
 
 async function fetchStatus(repo) {
