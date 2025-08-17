@@ -26,6 +26,7 @@ function iconFor(status) {
 
 async function fetchRepos(user) {
   const repos = [];
+
   let error = null;
   for (let page = 1; ; page += 1) {
     try {
@@ -51,7 +52,11 @@ async function fetchRepos(user) {
       error = "error";
       break;
     }
+  } catch (err) {
+    console.error("Failed to fetch repos:", err);
+    throw err;
   }
+
   const repoNames = repos.map((r) => r.full_name);
   return { names: repoNames, error: errorOccurred };
 }
@@ -95,15 +100,26 @@ async function load() {
     return;
   }
 
-  if (repoFetchFailed) {
-    list.innerHTML = "<li>⚠️ Error fetching repositories</li>";
-    return;
-  }
+  results.forEach((result, index) => {
+    if (result.status === "fulfilled") {
+      repos.push(...result.value);
+    } else {
+      const li = document.createElement("li");
+      li.textContent = `⚠️ Error fetching repositories for ${users[index]}`;
+      list.appendChild(li);
+    }
+  });
 
   const repos = repoLists.flat();
 
   if (repos.length === 0) {
-    list.innerHTML = "<li>No repositories found</li>";
+    if (list.children.length === 0) {
+      list.innerHTML = "<li>No repositories found</li>";
+    } else {
+      const li = document.createElement("li");
+      li.textContent = "No repositories found";
+      list.appendChild(li);
+    }
     return;
   }
 
