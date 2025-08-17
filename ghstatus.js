@@ -22,7 +22,7 @@ function iconFor(status) {
 
 async function fetchRepos(user) {
   const resp = await fetch(
-    `https://api.github.com/users/${user}/repos?per_page=100&type=public`
+    `https://api.github.com/users/${user}/repos?per_page=100&type=public`,
   );
   if (!resp.ok) return [];
   const data = await resp.json();
@@ -31,7 +31,7 @@ async function fetchRepos(user) {
 
 async function fetchStatus(repo) {
   const resp = await fetch(
-    `https://api.github.com/repos/${repo}/actions/runs?per_page=1`
+    `https://api.github.com/repos/${repo}/actions/runs?per_page=1`,
   );
   if (!resp.ok) return "unknown";
   const data = await resp.json();
