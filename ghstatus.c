@@ -337,6 +337,7 @@ int main(int argc, char **argv) {
           buf[n] = '\0';
           buf[strcspn(buf, "\n")] = 0;
           strncpy(STATUS[i], buf, sizeof(STATUS[i]) - 1);
+          STATUS[i][sizeof(STATUS[i]) - 1] = '\0';
         } else if (n == 0) {
           close(pipes[i][0]);
           waitpid(fetch_pids[i], NULL, 0);
