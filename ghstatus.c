@@ -88,7 +88,16 @@ void load_repos(const char *user) {
   char line[256];
   while (fgets(line, sizeof(line), fp) && NUM_REPOS < MAX_REPOS) {
     line[strcspn(line, "\n")] = 0;
-    REPOS[NUM_REPOS++] = strdup(line);
+    char *copy = strdup(line);
+    if (!copy) {
+      // allocation failed; roll back any repos added in this call
+      fprintf(stderr, "Failed to allocate repo name\n");
+      while (NUM_REPOS > old_num) {
+        free(REPOS[--NUM_REPOS]);
+      }
+      break; // stop reading further repositories
+    }
+    REPOS[NUM_REPOS++] = copy;
   }
   fclose(fp);
 
