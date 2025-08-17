@@ -26,25 +26,21 @@ function iconFor(status) {
 
 async function fetchRepos(user) {
   const repos = [];
-  let errorOccurred = false;
-  for (let page = 1; ; page += 1) {
-    try {
+  try {
+    for (let page = 1; ; page += 1) {
       const resp = await fetch(
         `https://api.github.com/users/${user}/repos?per_page=100&type=public&page=${page}`,
       );
-      if (!resp.ok) break;
+      if (!resp.ok) throw new Error("Failed to fetch repos");
       const data = await resp.json();
       repos.push(...data);
       if (data.length < 100) break;
-    } catch (err) {
-      console.error("Failed to fetch repos:", err);
-      errorOccurred = true;
-      break;
     }
+  } catch (err) {
+    console.error("Failed to fetch repos:", err);
+    throw err;
   }
-  const repoNames = repos.map((r) => r.full_name);
-  if (errorOccurred) repoNames.error = true;
-  return repoNames;
+  return repos.map((r) => r.full_name);
 }
 
 async function fetchStatus(repo) {
@@ -69,17 +65,27 @@ async function load() {
   const list = document.getElementById("results");
   list.innerHTML = "";
 
-  const repoLists = await Promise.all(users.map(fetchRepos));
-  const repoFetchFailed = repoLists.some((r) => r.error);
-  const repos = repoLists.flat();
+  const results = await Promise.allSettled(users.map(fetchRepos));
+  const repos = [];
 
-  if (repoFetchFailed) {
-    list.innerHTML = "<li>⚠️ Error fetching repositories</li>";
-    return;
-  }
+  results.forEach((result, index) => {
+    if (result.status === "fulfilled") {
+      repos.push(...result.value);
+    } else {
+      const li = document.createElement("li");
+      li.textContent = `⚠️ Error fetching repositories for ${users[index]}`;
+      list.appendChild(li);
+    }
+  });
 
   if (repos.length === 0) {
-    list.innerHTML = "<li>No repositories found</li>";
+    if (list.children.length === 0) {
+      list.innerHTML = "<li>No repositories found</li>";
+    } else {
+      const li = document.createElement("li");
+      li.textContent = "No repositories found";
+      list.appendChild(li);
+    }
     return;
   }
 
