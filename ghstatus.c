@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
+#include <signal.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -172,6 +173,20 @@ void spawn_fetches(int pipes[][2], pid_t pids[]) {
       close(pipes[i][0]);
       close(pipes[i][1]);
       pipes[i][0] = pipes[i][1] = -1;
+    }
+  }
+}
+
+void cleanup(int pipes[][2], pid_t pids[]) {
+  for (int i = 0; i < NUM_REPOS; i++) {
+    free(REPOS[i]);
+    if (pipes[i][0] != -1)
+      close(pipes[i][0]);
+    if (pipes[i][1] != -1)
+      close(pipes[i][1]);
+    if (pids[i] > 0) {
+      kill(pids[i], SIGTERM);
+      waitpid(pids[i], NULL, 0);
     }
   }
 }
@@ -483,6 +498,7 @@ int main(int argc, char **argv) {
     }
   }
 
+  cleanup(pipes, fetch_pids);
   endwin();
   return 0;
 }
