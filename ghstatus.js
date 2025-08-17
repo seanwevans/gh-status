@@ -26,21 +26,39 @@ function iconFor(status) {
 
 async function fetchRepos(user) {
   const repos = [];
-  try {
-    for (let page = 1; ; page += 1) {
+
+  let error = null;
+  for (let page = 1; ; page += 1) {
+    try {
       const resp = await fetch(
         `https://api.github.com/users/${user}/repos?per_page=100&type=public&page=${page}`,
       );
-      if (!resp.ok) throw new Error("Failed to fetch repos");
+      if (
+        resp.status === 403 &&
+        resp.headers.get("X-RateLimit-Remaining") === "0"
+      ) {
+        error = "rate_limit";
+        break;
+      }
+      if (!resp.ok) {
+        error = "error";
+        break;
+      }
       const data = await resp.json();
       repos.push(...data);
       if (data.length < 100) break;
+    } catch (err) {
+      console.error("Failed to fetch repos:", err);
+      error = "error";
+      break;
     }
   } catch (err) {
     console.error("Failed to fetch repos:", err);
     throw err;
   }
-  return repos.map((r) => r.full_name);
+
+  const repoNames = repos.map((r) => r.full_name);
+  return { names: repoNames, error: errorOccurred };
 }
 
 async function fetchStatus(repo) {
@@ -48,6 +66,11 @@ async function fetchStatus(repo) {
     const resp = await fetch(
       `https://api.github.com/repos/${repo}/actions/runs?per_page=1`,
     );
+    if (
+      resp.status === 403 &&
+      resp.headers.get("X-RateLimit-Remaining") === "0"
+    )
+      return "rate_limit";
     if (!resp.ok) return "error";
     const data = await resp.json();
     if (data.workflow_runs.length === 0) return "no_runs";
@@ -65,8 +88,17 @@ async function load() {
   const list = document.getElementById("results");
   list.innerHTML = "";
 
-  const results = await Promise.allSettled(users.map(fetchRepos));
-  const repos = [];
+  const repoLists = await Promise.all(users.map(fetchRepos));
+
+  const rateLimited = repoLists.some((r) => r.error === "rate_limit");
+  const repoFetchFailed = repoLists.some(
+    (r) => r.error && r.error !== "rate_limit",
+  );
+
+  if (rateLimited) {
+    list.innerHTML = "<li>⚠️ Rate limit exceeded</li>";
+    return;
+  }
 
   results.forEach((result, index) => {
     if (result.status === "fulfilled") {
@@ -77,6 +109,8 @@ async function load() {
       list.appendChild(li);
     }
   });
+
+  const repos = repoLists.flat();
 
   if (repos.length === 0) {
     if (list.children.length === 0) {
@@ -94,6 +128,10 @@ async function load() {
     li.textContent = `${repo} - loading`;
     list.appendChild(li);
     fetchStatus(repo).then((status) => {
+      if (status === "rate_limit") {
+        li.textContent = `⚠️ ${repo} - rate limit exceeded`;
+        return;
+      }
       if (status === "error") {
         li.textContent = `⚠️ ${repo} - error fetching status`;
         return;
