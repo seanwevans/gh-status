@@ -277,10 +277,10 @@ int main(int argc, char **argv) {
     }
 
     // stats
-    int count_success = 0, count_fail = 0, count_timeout = 0,
-        count_cancel = 0, count_skipped = 0, count_progress = 0,
-        count_action = 0, count_neutral = 0, count_stale = 0,
-        count_queued = 0, count_loading = 0, count_other = 0;
+    int count_success = 0, count_fail = 0, count_timeout = 0, count_cancel = 0,
+        count_skipped = 0, count_progress = 0, count_action = 0,
+        count_neutral = 0, count_stale = 0, count_queued = 0, count_loading = 0,
+        count_other = 0;
 
     for (int i = 0; i < NUM_REPOS; i++) {
       if (strstr(STATUS[i], "success"))
@@ -312,12 +312,12 @@ int main(int argc, char **argv) {
                              : (sort_mode == SORT_ALPHA) ? "Alphabetical"
                                                          : "Status";
 
-    mvprintw(term_rows - 2, 0,
-             "📦%d 👥%d ✅%d ❌%d ⏳%d 🛑%d ⏭️%d 🔁%d ⛔%d ⭕%d 🥖%d 📋%d 🌀%d ➖%d",
-             NUM_REPOS, argc - 1, count_success, count_fail, count_timeout,
-             count_cancel, count_skipped, count_progress, count_action,
-             count_neutral, count_stale, count_queued, count_loading,
-             count_other);
+    mvprintw(
+        term_rows - 2, 0,
+        "📦%d 👥%d ✅%d ❌%d ⏳%d 🛑%d ⏭️%d 🔁%d ⛔%d ⭕%d 🥖%d 📋%d 🌀%d ➖%d",
+        NUM_REPOS, argc - 1, count_success, count_fail, count_timeout,
+        count_cancel, count_skipped, count_progress, count_action,
+        count_neutral, count_stale, count_queued, count_loading, count_other);
 
     // --- footer buttons ---
     move(term_rows - 1, 0);
@@ -330,29 +330,34 @@ int main(int argc, char **argv) {
     printw("[q]");
     attroff(A_REVERSE | A_BOLD);
     printw(" Quit ");
-    q_col_start = 0; q_col_end = 2;
+    q_col_start = 0;
+    q_col_end = 2;
 
     // [space]
     int sp_start = getcurx(stdscr);
-    if (hover_y == term_rows - 1 && hover_x >= sp_start && hover_x <= sp_start+6)
+    if (hover_y == term_rows - 1 && hover_x >= sp_start &&
+        hover_x <= sp_start + 6)
       attron(A_REVERSE | A_BOLD);
     else
       attron(A_REVERSE);
     printw("[space]");
     attroff(A_REVERSE | A_BOLD);
     printw(" Refresh ");
-    sp_col_start = sp_start; sp_col_end = sp_start+6;
+    sp_col_start = sp_start;
+    sp_col_end = sp_start + 6;
 
     // [s]
     int s_start = getcurx(stdscr);
-    if (hover_y == term_rows - 1 && hover_x >= s_start && hover_x <= s_start+2)
+    if (hover_y == term_rows - 1 && hover_x >= s_start &&
+        hover_x <= s_start + 2)
       attron(A_REVERSE | A_BOLD);
     else
       attron(A_REVERSE);
     printw("[s]");
     attroff(A_REVERSE | A_BOLD);
     printw(" %-12s", sort_label);
-    s_col_start = s_start; s_col_end = s_start+2;
+    s_col_start = s_start;
+    s_col_end = s_start + 2;
 
     mvprintw(term_rows - 1, getmaxx(stdscr) - 10, "%lc %ds",
              spinner_chars[spinner_index], secs_left);
