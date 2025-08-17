@@ -31,11 +31,15 @@ make
 ### Usage
 
 Invoke the program with a GitHub username to show workflow status for that
-user's repositories:
+user's repositories. Optional flags allow customization of refresh timing and
+concurrency:
 
 ```sh
-./ghstatus <user>
+./ghstatus [-p seconds] [-c count] <user> [user2 ...]
 ```
+
+`-p` sets the refresh interval in seconds (default 300) and `-c` limits the
+number of simultaneous fetches (default 32).
 
 The tool relies on the GitHub CLI for API requests. To access private
 repositories the CLI must be authenticated (`gh auth login`) and the account
