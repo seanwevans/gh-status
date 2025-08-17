@@ -87,7 +87,10 @@ async function load() {
   const list = document.getElementById("results");
   list.innerHTML = "";
 
-  const repoLists = await Promise.all(users.map(fetchRepos));
+  const repoResults = await Promise.allSettled(users.map(fetchRepos));
+  const repoLists = repoResults.map((r) =>
+    r.status === "fulfilled" ? r.value : { names: [], error: "error" },
+  );
 
   const rateLimited = repoLists.some((r) => r.error === "rate_limit");
   const repoFetchFailed = repoLists.some(
@@ -100,16 +103,21 @@ async function load() {
   }
 
   if (repoFetchFailed) {
-    repoLists.forEach((r, index) => {
-      if (r.error && r.error !== "rate_limit") {
-        const li = document.createElement("li");
-        li.textContent = `⚠️ Error fetching repositories for ${users[index]}`;
-        list.appendChild(li);
-      }
-    });
+    const failedUsers = repoLists
+      .map((r, index) =>
+        r.error && r.error !== "rate_limit" ? users[index] : null,
+      )
+      .filter(Boolean);
+    const li = document.createElement("li");
+    li.textContent = `⚠️ Error fetching repositories for: ${failedUsers.join(", ")}`;
+    list.appendChild(li);
+
+    if (failedUsers.length === users.length) return;
   }
 
-  const repos = repoLists.flatMap((r) => r.names);
+  const repos = repoLists
+    .filter((r) => !r.error)
+    .flatMap((r) => r.names);
 
   if (repos.length === 0) {
     if (list.children.length === 0) {
