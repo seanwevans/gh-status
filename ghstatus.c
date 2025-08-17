@@ -59,7 +59,8 @@ void load_repos(const char *user) {
     }
 
     execlp("gh", "gh", "repo", "list", user, "--public", "--limit", "500",
-           "--json", "nameWithOwner", "--jq", ".[].nameWithOwner", (char *)NULL);
+           "--json", "nameWithOwner", "--jq", ".[].nameWithOwner",
+           (char *)NULL);
     _exit(1); // exec failed
   }
 
@@ -155,13 +156,15 @@ void spawn_fetches(int pipes[][2], pid_t pids[]) {
       dup2(pipes[i][1], STDOUT_FILENO);
       close(pipes[i][0]);
       close(pipes[i][1]);
+      int devnull = open("/dev/null", O_WRONLY);
+      if (devnull >= 0) {
+        dup2(devnull, STDERR_FILENO);
+        close(devnull);
+      }
 
-      char cmd[512];
-      snprintf(cmd, sizeof(cmd),
-               "gh run list -L 1 -R %s --json status,conclusion "
-               "--jq '.[0] | \"\\(.status) \\(.conclusion)\"' 2>/dev/null",
-               REPOS[i]);
-      execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
+      execlp("gh", "gh", "run", "list", "-L", "1", "-R", REPOS[i], "--json",
+             "status,conclusion", "--jq",
+             ".[0] | \"\\(.status) \\(.conclusion)\"", (char *)NULL);
       _exit(1);
     } else if (pid > 0) {
       pids[i] = pid;
@@ -429,7 +432,6 @@ int main(int argc, char **argv) {
              spinner_chars[spinner_index], secs_left);
 
     refresh();
-
 
     if (time(NULL) - last_poll >= POLL_INTERVAL_S) {
       spawn_fetches(pipes, fetch_pids);
