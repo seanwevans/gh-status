@@ -36,22 +36,56 @@ int order[MAX_REPOS];          // active display order
 int hover_x = -1, hover_y = -1;
 
 void load_repos(const char *user) {
-  char cmd[512];
-  snprintf(cmd, sizeof(cmd),
-           "gh repo list %s --public --limit 500 --json nameWithOwner "
-           "--jq '.[].nameWithOwner' 2>/dev/null",
-           user);
-
-  FILE *fp = popen(cmd, "r");
-  if (!fp)
+  int fds[2];
+  if (pipe(fds) == -1)
     return;
 
+  pid_t pid = fork();
+  if (pid == -1) {
+    close(fds[0]);
+    close(fds[1]);
+    return;
+  }
+
+  if (pid == 0) { // child
+    dup2(fds[1], STDOUT_FILENO);
+    close(fds[0]);
+    close(fds[1]);
+
+    int devnull = open("/dev/null", O_WRONLY);
+    if (devnull >= 0) {
+      dup2(devnull, STDERR_FILENO);
+      close(devnull);
+    }
+
+    execlp("gh", "gh", "repo", "list", user, "--public", "--limit", "500",
+           "--json", "nameWithOwner", "--jq", ".[].nameWithOwner", (char *)NULL);
+    _exit(1); // exec failed
+  }
+
+  close(fds[1]);
+  FILE *fp = fdopen(fds[0], "r");
+  if (!fp) {
+    close(fds[0]);
+    waitpid(pid, NULL, 0);
+    return;
+  }
+
+  int old_num = NUM_REPOS;
   char line[256];
   while (fgets(line, sizeof(line), fp) && NUM_REPOS < MAX_REPOS) {
     line[strcspn(line, "\n")] = 0;
     REPOS[NUM_REPOS++] = strdup(line);
   }
-  pclose(fp);
+  fclose(fp);
+
+  int status;
+  if (waitpid(pid, &status, 0) == -1 || !WIFEXITED(status) ||
+      WEXITSTATUS(status) != 0) {
+    while (NUM_REPOS > old_num) {
+      free(REPOS[--NUM_REPOS]);
+    }
+  }
 }
 
 const wchar_t *status_icon(const char *status) {
