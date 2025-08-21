@@ -49,3 +49,23 @@ The tool relies on the GitHub CLI for API requests. To access private
 repositories the CLI must be authenticated (`gh auth login`) and the account
 must have permission to view those repositories. Without authentication or
 appropriate access, private repository information cannot be displayed.
+
+## Perl version
+
+The `ghstatus.pl` script provides a simple command-line monitor written in
+Perl. It queries repositories for the specified GitHub usernames and prints the
+latest workflow run status using emoji icons.
+
+### Dependencies
+
+- Perl 5
+- [GitHub CLI](https://cli.github.com/)
+
+### Usage
+
+```sh
+./ghstatus.pl <user> [user2 ...]
+```
+
+Flags `-p` and `-c` mirror the terminal version's options. The script refreshes
+every `-p` seconds (default 300) until interrupted.
