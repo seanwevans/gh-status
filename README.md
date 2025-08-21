@@ -49,3 +49,26 @@ The tool relies on the GitHub CLI for API requests. To access private
 repositories the CLI must be authenticated (`gh auth login`) and the account
 must have permission to view those repositories. Without authentication or
 appropriate access, private repository information cannot be displayed.
+
+## Zig version
+
+`ghstatus.zig` and `status.zig` provide a lightweight implementation of the
+monitor in [Zig](https://ziglang.org/). It invokes the GitHub CLI to fetch the
+latest workflow status for each repository and prints an emoji icon alongside
+the repository name.
+
+### Build
+
+Compile the executable with Zig:
+
+```sh
+zig build-exe ghstatus.zig
+```
+
+### Test
+
+Unit tests verify the status‑to‑emoji/color mapping:
+
+```sh
+zig test status.zig
+```
