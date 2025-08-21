@@ -49,3 +49,16 @@ The tool relies on the GitHub CLI for API requests. To access private
 repositories the CLI must be authenticated (`gh auth login`) and the account
 must have permission to view those repositories. Without authentication or
 appropriate access, private repository information cannot be displayed.
+
+## Nim version
+
+The `ghstatus.nim` program offers a simplified terminal monitor implemented in
+Nim that queries the GitHub API directly. Compile with SSL support and run:
+
+```sh
+nim c -d:ssl ghstatus.nim
+./ghstatus <user> [user2 ...]
+```
+
+It prints each repository with an emoji representing the latest workflow run
+status.
