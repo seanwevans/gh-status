@@ -56,6 +56,9 @@ pid_t fetch_pids[MAX_REPOS];
 // button hover state
 int hover_x = -1, hover_y = -1;
 
+const wchar_t *status_icon(const char *status);
+int status_color(const char *status);
+
 void load_repos(const char *user) {
   int fds[2];
   if (pipe(fds) == -1)
@@ -126,21 +129,6 @@ void load_repos(const char *user) {
   }
 }
 
-const wchar_t *status_icon(const char *status) {
-  for (size_t i = 0; i < STATUS_KNOWN; i++) {
-    if (strstr(status, status_map[i].match))
-      return status_map[i].icon;
-  }
-  return status_map[STATUS_KNOWN].icon;
-}
-
-int status_color(const char *status) {
-  for (size_t i = 0; i < STATUS_KNOWN; i++) {
-    if (strstr(status, status_map[i].match))
-      return status_map[i].color;
-  }
-  return status_map[STATUS_KNOWN].color;
-}
 
 void spawn_fetches(int pipes[][2], pid_t pids[], int max_concurrent_fetches) {
   // tear down any previous fetches
