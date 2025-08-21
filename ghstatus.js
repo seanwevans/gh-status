@@ -1,20 +1,17 @@
-const statusIcons = {
-  success: "✅",
-  failure: "❌",
-  cancelled: "🛑",
-  skipped: "⏭️",
-  timed_out: "⌛",
-  action_required: "⛔",
-  neutral: "⭕",
-  stale: "🥖",
-  in_progress: "🔁",
-  queued: "📋",
-  no_runs: "➖",
-  completed: "➖",
-  loading: "🌀",
-  error: "⚠️",
-  default: "➖",
-};
+const statusMap = [
+  { match: "success", icon: "✅" },
+  { match: "failure", icon: "❌" },
+  { match: "timed_out", icon: "⌛" },
+  { match: "cancelled", icon: "🛑" },
+  { match: "skipped", icon: "⏭️" },
+  { match: "in_progress", icon: "🔁" },
+  { match: "action_required", icon: "⛔" },
+  { match: "neutral", icon: "⭕" },
+  { match: "stale", icon: "🥖" },
+  { match: "queued", icon: "📋" },
+  { match: "loading", icon: "🌀" },
+  { match: null, icon: "➖" },
+];
 
 // Maximum number of concurrent status requests. Adjust via console for testing.
 let CONCURRENCY_LIMIT = window.CONCURRENCY_LIMIT || 5;
@@ -46,12 +43,11 @@ function limitConcurrency(limit) {
   };
 }
 
-function iconFor(status) {
-  if (!status) return statusIcons.default;
-  for (const [key, icon] of Object.entries(statusIcons)) {
-    if (key !== "default" && status.includes(key)) return icon;
+function statusIcon(status) {
+  for (const { match, icon } of statusMap) {
+    if (match && status && status.includes(match)) return icon;
   }
-  return statusIcons.default;
+  return statusMap[statusMap.length - 1].icon;
 }
 
 async function fetchRepos(user) {
@@ -177,20 +173,16 @@ async function load() {
   const limiter = limitConcurrency(CONCURRENCY_LIMIT);
   for (const repo of repos) {
     const li = document.createElement("li");
-    li.textContent = `${repo} - loading`;
+    li.textContent = `${statusIcon("loading")} ${repo}`;
     list.appendChild(li);
 
     limiter(() => fetchStatus(repo)).then((status) => {
-      if (status === "rate_limit") {
-        li.textContent = `⚠️ ${repo} - rate limit exceeded`;
+      if (status === "rate_limit" || status === "error") {
+        li.textContent = `⚠️ ${repo}`;
         return;
       }
-      if (status === "error") {
-        li.textContent = `⚠️ ${repo} - error fetching status`;
-        return;
-      }
-      const icon = iconFor(status);
-      li.textContent = `${icon} ${repo} - ${status}`;
+      const icon = statusIcon(status);
+      li.textContent = `${icon} ${repo}`;
     });
   }
 }
