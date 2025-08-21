@@ -49,3 +49,24 @@ The tool relies on the GitHub CLI for API requests. To access private
 repositories the CLI must be authenticated (`gh auth login`) and the account
 must have permission to view those repositories. Without authentication or
 appropriate access, private repository information cannot be displayed.
+
+## Haskell version
+
+The `ghstatus.hs` program offers a lightweight console monitor written in Haskell. It relies on the GitHub CLI to retrieve workflow information and prints an emoji icon for the latest run status of each repository.
+
+### Dependencies
+
+- `ghc`
+- [GitHub CLI](https://cli.github.com/)
+
+### Build
+
+```sh
+ghc -O2 -o ghstatus-hs ghstatus.hs
+```
+
+### Usage
+
+```sh
+./ghstatus-hs <user> [user2 ...]
+```
