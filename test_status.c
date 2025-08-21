@@ -6,13 +6,13 @@
 #undef main
 
 int main(void) {
-    setlocale(LC_ALL, "");
-    assert(wcscmp(status_icon("success"), L"✅") == 0);
-    assert(wcscmp(status_icon("failure"), L"❌") == 0);
-    assert(wcscmp(status_icon("unknown"), L"➖") == 0);
+  setlocale(LC_ALL, "");
+  assert(wcscmp(status_icon("success"), L"✅") == 0);
+  assert(wcscmp(status_icon("failure"), L"❌") == 0);
+  assert(wcscmp(status_icon("unknown"), L"➖") == 0);
 
-    assert(status_color("success") == 1);
-    assert(status_color("failure") == 2);
-    assert(status_color("unknown") == 3);
-    return 0;
+  assert(status_color("success") == 1);
+  assert(status_color("failure") == 2);
+  assert(status_color("unknown") == 3);
+  return 0;
 }

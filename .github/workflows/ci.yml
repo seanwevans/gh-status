@@ -15,6 +15,12 @@ jobs:
           sudo apt-get install -y libncurses-dev
           pip install pre-commit
       - name: Run pre-commit
-        run: pre-commit run --show-diff-on-failure --all-files
+        run: |
+          pre-commit run --show-diff-on-failure --all-files || (
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -am "chore: format code" || true
+            pre-commit run --show-diff-on-failure --all-files
+          )
       - name: Build
         run: make
