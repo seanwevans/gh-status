@@ -49,3 +49,19 @@ The tool relies on the GitHub CLI for API requests. To access private
 repositories the CLI must be authenticated (`gh auth login`) and the account
 must have permission to view those repositories. Without authentication or
 appropriate access, private repository information cannot be displayed.
+
+## PL/pgSQL version
+
+The `ghstatus.sql` script defines a PostgreSQL function that retrieves the
+latest GitHub Actions workflow run for repositories owned by the provided
+usernames. It relies on the [`http` extension](https://github.com/pramsey/pgsql-http)
+to query the GitHub API directly from the database.
+
+### Usage
+
+Load the script and call the function with an array of usernames:
+
+```sql
+\i ghstatus.sql
+SELECT * FROM ghstatus_latest_runs(ARRAY['octocat']);
+```
