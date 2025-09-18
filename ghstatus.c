@@ -10,6 +10,7 @@
 #include <locale.h>
 #include <ncursesw/ncurses.h>
 #include <signal.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
@@ -28,17 +29,26 @@ int NUM_REPOS = 0;
 char STATUS[MAX_REPOS][64];
 const wchar_t spinner_chars[] = L"🌑🌒🌓🌔🌕🌖🌗🌘";
 
-struct {
+typedef struct {
   const char *match;
   const wchar_t *icon;
+  const char *label;
   int color;
-} status_map[] = {
-    {"success", L"✅", 1},         {"failure", L"❌", 2},
-    {"timed_out", L"⌛", 2},       {"cancelled", L"🛑", 4},
-    {"skipped", L"⏭️", 5},          {"in_progress", L"🔁", 7},
-    {"action_required", L"⛔", 6}, {"neutral", L"⭕", 3},
-    {"stale", L"🥖", 4},           {"queued", L"📋", 3},
-    {"loading", L"🌀", 3},         {NULL, L"➖", 3},
+} StatusEntry;
+
+StatusEntry status_map[] = {
+    {"success", L"✅", "Conclusion: success", 1},
+    {"failure", L"❌", "Conclusion: failure", 2},
+    {"timed_out", L"⌛", "Conclusion: timed out", 2},
+    {"cancelled", L"🛑", "Conclusion: cancelled", 4},
+    {"skipped", L"⏭️", "Conclusion: skipped", 5},
+    {"in_progress", L"🔁", "Status: in progress", 7},
+    {"action_required", L"⛔", "Status: action required", 6},
+    {"neutral", L"⭕", "Conclusion: neutral", 3},
+    {"stale", L"🥖", "Status: stale", 4},
+    {"queued", L"📋", "Status: queued", 3},
+    {"loading", L"🌀", "Status: loading", 3},
+    {NULL, L"➖", "Unknown status", 3},
 };
 
 #define STATUS_COUNT (sizeof(status_map) / sizeof(status_map[0]))
@@ -126,20 +136,41 @@ void load_repos(const char *user) {
   }
 }
 
-const wchar_t *status_icon(const char *status) {
+const StatusEntry *status_details(const char *status) {
   for (size_t i = 0; i < STATUS_KNOWN; i++) {
-    if (strstr(status, status_map[i].match))
-      return status_map[i].icon;
+    if (status && strstr(status, status_map[i].match))
+      return &status_map[i];
   }
-  return status_map[STATUS_KNOWN].icon;
+  return &status_map[STATUS_KNOWN];
+}
+
+const wchar_t *status_icon(const char *status) {
+  return status_details(status)->icon;
 }
 
 int status_color(const char *status) {
-  for (size_t i = 0; i < STATUS_KNOWN; i++) {
-    if (strstr(status, status_map[i].match))
-      return status_map[i].color;
+  return status_details(status)->color;
+}
+
+void describe_status(const char *status, const char *fallback, char *buf,
+                     size_t len) {
+  if (!buf || len == 0)
+    return;
+  if (status && *status) {
+    size_t bi = 0;
+    for (const char *p = status; *p && bi + 1 < len; ++p) {
+      char ch = (*p == '_') ? ' ' : *p;
+      buf[bi++] = ch;
+    }
+    buf[bi] = '\0';
+    if (bi > 0)
+      return;
   }
-  return status_map[STATUS_KNOWN].color;
+  if (fallback) {
+    snprintf(buf, len, "%s", fallback);
+  } else {
+    buf[0] = '\0';
+  }
 }
 
 void spawn_fetches(int pipes[][2], pid_t pids[], int max_concurrent_fetches) {
@@ -451,11 +482,53 @@ int main(int argc, char **argv) {
 
     mvprintw(term_rows - 2, 0, "📦%d 👥%d", NUM_REPOS, num_users);
     int stats_col = getcurx(stdscr);
+    int stats_start[STATUS_COUNT];
+    int stats_end[STATUS_COUNT];
     for (size_t j = 0; j < STATUS_COUNT; j++) {
+      stats_start[j] = stats_col;
       mvprintw(term_rows - 2, stats_col, " %ls%d", status_map[j].icon,
                counts[j]);
-      stats_col = getcurx(stdscr);
+      stats_end[j] = getcurx(stdscr);
+      stats_col = stats_end[j];
     }
+
+    char tooltip[128] = "";
+    int repo_rows = (NUM_REPOS + cols_fit - 1) / cols_fit;
+    int repo_row_start = 2;
+    int repo_row_end = repo_row_start + repo_rows;
+    if (hover_x >= 0 && hover_y >= repo_row_start && hover_y < repo_row_end &&
+        hover_x < cols_fit * cell_w) {
+      int rel_row = hover_y - repo_row_start;
+      int rel_col = hover_x / cell_w;
+      int index = rel_row * cols_fit + rel_col;
+      if (rel_col < cols_fit && index < NUM_REPOS) {
+        int repo_index = order[index];
+        const StatusEntry *entry = status_details(STATUS[repo_index]);
+        describe_status(STATUS[repo_index], entry->label, tooltip,
+                        sizeof(tooltip));
+      }
+    } else if (hover_y == term_rows - 2 && hover_x >= 0) {
+      for (size_t j = 0; j < STATUS_COUNT; j++) {
+        if (hover_x >= stats_start[j] && hover_x < stats_end[j]) {
+          snprintf(tooltip, sizeof(tooltip), "%s (%d)", status_map[j].label,
+                   counts[j]);
+          break;
+        }
+      }
+    } else if (hover_y == term_rows - 1 && hover_x >= 0) {
+      if (hover_x >= q_col_start && hover_x <= q_col_end) {
+        snprintf(tooltip, sizeof(tooltip), "Quit application");
+      } else if (hover_x >= sp_col_start && hover_x <= sp_col_end) {
+        snprintf(tooltip, sizeof(tooltip), "Refresh repository statuses");
+      } else if (hover_x >= s_col_start && hover_x <= s_col_end) {
+        snprintf(tooltip, sizeof(tooltip), "Change sorting mode");
+      }
+    }
+
+    move(0, 0);
+    clrtoeol();
+    if (tooltip[0] != '\0')
+      mvprintw(0, 0, "%s", tooltip);
 
     // --- footer buttons ---
     move(term_rows - 1, 0);
