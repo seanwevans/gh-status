@@ -1,16 +1,19 @@
 const statusMap = [
-  { match: "success", icon: "✅" },
-  { match: "failure", icon: "❌" },
-  { match: "timed_out", icon: "⌛" },
-  { match: "cancelled", icon: "🛑" },
-  { match: "skipped", icon: "⏭️" },
-  { match: "in_progress", icon: "🔁" },
-  { match: "action_required", icon: "⛔" },
-  { match: "neutral", icon: "⭕" },
-  { match: "stale", icon: "🥖" },
-  { match: "queued", icon: "📋" },
-  { match: "loading", icon: "🌀" },
-  { match: null, icon: "➖" },
+  { match: "success", icon: "✅", label: "Conclusion: success" },
+  { match: "failure", icon: "❌", label: "Conclusion: failure" },
+  { match: "timed_out", icon: "⌛", label: "Conclusion: timed out" },
+  { match: "cancelled", icon: "🛑", label: "Conclusion: cancelled" },
+  { match: "skipped", icon: "⏭️", label: "Conclusion: skipped" },
+  { match: "in_progress", icon: "🔁", label: "Status: in progress" },
+  { match: "action_required", icon: "⛔", label: "Status: action required" },
+  { match: "neutral", icon: "⭕", label: "Conclusion: neutral" },
+  { match: "stale", icon: "🥖", label: "Status: stale" },
+  { match: "queued", icon: "📋", label: "Status: queued" },
+  { match: "loading", icon: "🌀", label: "Status: loading" },
+  { match: "no_runs", icon: "➖", label: "No workflow runs" },
+  { match: "rate_limit", icon: "⚠️", label: "Rate limit exceeded" },
+  { match: "error", icon: "⚠️", label: "Error fetching status" },
+  { match: null, icon: "➖", label: "Unknown status" },
 ];
 
 // Maximum number of concurrent status requests. Adjust via console for testing.
@@ -43,11 +46,38 @@ function limitConcurrency(limit) {
   };
 }
 
-function statusIcon(status) {
-  for (const { match, icon } of statusMap) {
-    if (match && status && status.includes(match)) return icon;
+function getStatusDetails(status) {
+  const normalized = (status || "").toLowerCase();
+  for (const entry of statusMap) {
+    if (entry.match && normalized.includes(entry.match)) {
+      return entry;
+    }
   }
-  return statusMap[statusMap.length - 1].icon;
+  return statusMap[statusMap.length - 1];
+}
+
+function describeStatus(status, fallback) {
+  if (!status) return fallback;
+  return status
+    .split(/\s+/)
+    .map((part) => part.replace(/_/g, " "))
+    .join(" ");
+}
+
+function setStatusIcon(iconElement, status) {
+  const { icon, label } = getStatusDetails(status);
+  iconElement.textContent = icon;
+  iconElement.title = describeStatus(status, label);
+}
+
+function createRepoListItem(repo, status) {
+  const li = document.createElement("li");
+  const iconSpan = document.createElement("span");
+  iconSpan.className = "status-icon";
+  li.appendChild(iconSpan);
+  li.appendChild(document.createTextNode(` ${repo}`));
+  setStatusIcon(iconSpan, status);
+  return { li, iconSpan };
 }
 
 async function fetchRepos(user) {
@@ -172,17 +202,11 @@ async function load() {
 
   const limiter = limitConcurrency(CONCURRENCY_LIMIT);
   for (const repo of repos) {
-    const li = document.createElement("li");
-    li.textContent = `${statusIcon("loading")} ${repo}`;
+    const { li, iconSpan } = createRepoListItem(repo, "loading");
     list.appendChild(li);
 
     limiter(() => fetchStatus(repo)).then((status) => {
-      if (status === "rate_limit" || status === "error") {
-        li.textContent = `⚠️ ${repo}`;
-        return;
-      }
-      const icon = statusIcon(status);
-      li.textContent = `${icon} ${repo}`;
+      setStatusIcon(iconSpan, status);
     });
   }
 }
