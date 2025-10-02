@@ -10,6 +10,7 @@
 #include <locale.h>
 #include <ncursesw/ncurses.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -67,6 +68,8 @@ pid_t fetch_pids[MAX_REPOS];
 
 // button hover state
 int hover_x = -1, hover_y = -1;
+
+void apply_sort(void);
 
 void load_repos(const char *user) {
   int fds[2];
@@ -178,6 +181,7 @@ void describe_status(const char *status, const char *fallback, char *buf,
 
 void spawn_fetches(int pipes[][2], pid_t pids[], int max_concurrent_fetches) {
   // tear down any previous fetches
+  bool status_changed = false;
   for (int i = 0; i < NUM_REPOS; i++) {
     if (pipes[i][0] != -1) {
       close(pipes[i][0]);
@@ -239,8 +243,12 @@ void spawn_fetches(int pipes[][2], pid_t pids[], int max_concurrent_fetches) {
       pids[i] = pid;
       close(pipes[i][1]);
       fcntl(pipes[i][0], F_SETFL, O_NONBLOCK);
-      strcpy(STATUS[i], "loading");
-      status_received[i] = 0;
+
+      if (strcmp(STATUS[i], "loading") != 0) {
+        strcpy(STATUS[i], "loading");
+        status_changed = true;
+        status_received[i] = 0;
+      }
       running++;
     } else {
       fprintf(stderr, "Failed to fork 'gh'. GitHub CLI is required.\n");
@@ -249,6 +257,9 @@ void spawn_fetches(int pipes[][2], pid_t pids[], int max_concurrent_fetches) {
       pipes[i][0] = pipes[i][1] = -1;
     }
   }
+
+  if (status_changed && sort_mode != SORT_DEFAULT)
+    apply_sort();
 }
 
 void cleanup(int pipes[][2], pid_t pids[]) {
@@ -452,6 +463,7 @@ int main(int argc, char **argv) {
     struct timeval tv = {0, 100000}; // 100ms
     select(maxfd + 1, &readfds, NULL, NULL, &tv);
 
+    bool updated_status = false;
     for (int i = 0; i < NUM_REPOS; i++) {
       if (pipes[i][0] != -1 && FD_ISSET(pipes[i][0], &readfds)) {
         char buf[128];
@@ -459,9 +471,13 @@ int main(int argc, char **argv) {
         if (n > 0) {
           buf[n] = '\0';
           buf[strcspn(buf, "\n")] = 0;
-          strncpy(STATUS[i], buf, sizeof(STATUS[i]) - 1);
-          STATUS[i][sizeof(STATUS[i]) - 1] = '\0';
-          status_received[i] = 1;
+
+          if (strncmp(STATUS[i], buf, sizeof(STATUS[i])) != 0) {
+            strncpy(STATUS[i], buf, sizeof(STATUS[i]) - 1);
+            STATUS[i][sizeof(STATUS[i]) - 1] = '\0';
+            status_received[i] = 1;
+            updated_status = true;
+          }
         } else if (n == 0) {
           close(pipes[i][0]);
           if (fetch_pids[i] > 0)
@@ -474,6 +490,9 @@ int main(int argc, char **argv) {
         }
       }
     }
+
+    if (updated_status && sort_mode != SORT_DEFAULT)
+      apply_sort();
 
     for (int oi = 0; oi < NUM_REPOS; oi++) {
       int i = order[oi];
