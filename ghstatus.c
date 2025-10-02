@@ -1,6 +1,6 @@
 /*
  GitHub Actions Build Monitor
-   usage: ghstatus [-p seconds] [-c count] user1 [user2 [user3 [...]]]
+   usage: ghstatus [-p seconds>=1] [-c count>=1] user1 [user2 [user3 [...]]]
    build: gcc ghstatus.c -o ghstatus -lncursesw
 */
 
@@ -28,6 +28,7 @@
 char *REPOS[MAX_REPOS];
 int NUM_REPOS = 0;
 char STATUS[MAX_REPOS][64];
+int status_received[MAX_REPOS];
 const wchar_t spinner_chars[] = L"🌑🌒🌓🌔🌕🌖🌗🌘";
 
 typedef struct {
@@ -49,6 +50,7 @@ StatusEntry status_map[] = {
     {"stale", L"🥖", "Status: stale", 4},
     {"queued", L"📋", "Status: queued", 3},
     {"loading", L"🌀", "Status: loading", 3},
+    {"no_runs", L"🚫", "Status: no runs", 3},
     {NULL, L"➖", "Unknown status", 3},
 };
 
@@ -94,7 +96,8 @@ void load_repos(const char *user) {
       close(devnull);
     }
 
-    execlp("gh", "gh", "repo", "list", user, "--public", "--limit", "500",
+    execlp("gh", "gh", "repo", "list", user, "--visibility", "all",
+           "--limit", "500",
            "--json", "nameWithOwner", "--jq", ".[].nameWithOwner",
            (char *)NULL);
     if (err != -1) {
@@ -240,9 +243,11 @@ void spawn_fetches(int pipes[][2], pid_t pids[], int max_concurrent_fetches) {
       pids[i] = pid;
       close(pipes[i][1]);
       fcntl(pipes[i][0], F_SETFL, O_NONBLOCK);
+
       if (strcmp(STATUS[i], "loading") != 0) {
         strcpy(STATUS[i], "loading");
         status_changed = true;
+        status_received[i] = 0;
       }
       running++;
     } else {
@@ -282,6 +287,19 @@ long long now_ms(void) {
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
   return (long long)ts.tv_sec * 1000LL + ts.tv_nsec / 1000000LL;
+}
+
+int sanitize_positive_option(const char *label, int value, int default_value,
+                             int warn) {
+  if (value < 1) {
+    if (warn) {
+      fprintf(stderr,
+              "Invalid %s (%d). Value must be at least 1. Using default %d.\n",
+              label, value, default_value);
+    }
+    return default_value;
+  }
+  return value;
 }
 
 int cmp_alpha(const void *a, const void *b) {
@@ -324,16 +342,22 @@ int main(int argc, char **argv) {
     case 'h':
     default:
       fprintf(stderr,
-              "Usage: %s [-p seconds] [-c count] <github-username> [user2 "
+              "Usage: %s [-p seconds>=1] [-c count>=1] <github-username> [user2 "
               "[user3 [...]]]\n",
               argv[0]);
       return 0;
     }
   }
 
+  poll_interval_s = sanitize_positive_option("poll interval", poll_interval_s,
+                                             POLL_INTERVAL_S, 1);
+  max_concurrent_fetches = sanitize_positive_option(
+      "max concurrent fetches", max_concurrent_fetches, MAX_CONCURRENT_FETCHES,
+      1);
+
   if (optind >= argc) {
     fprintf(stderr,
-            "Usage: %s [-p seconds] [-c count] <github-username> [user2 [user3 "
+            "Usage: %s [-p seconds>=1] [-c count>=1] <github-username> [user2 [user3 "
             "[...]]]\n",
             argv[0]);
     return 0;
@@ -447,9 +471,11 @@ int main(int argc, char **argv) {
         if (n > 0) {
           buf[n] = '\0';
           buf[strcspn(buf, "\n")] = 0;
+
           if (strncmp(STATUS[i], buf, sizeof(STATUS[i])) != 0) {
             strncpy(STATUS[i], buf, sizeof(STATUS[i]) - 1);
             STATUS[i][sizeof(STATUS[i]) - 1] = '\0';
+            status_received[i] = 1;
             updated_status = true;
           }
         } else if (n == 0) {
@@ -458,6 +484,9 @@ int main(int argc, char **argv) {
             waitpid(fetch_pids[i], NULL, 0);
           pipes[i][0] = -1;
           fetch_pids[i] = -1;
+          if (!status_received[i]) {
+            strcpy(STATUS[i], "no_runs");
+          }
         }
       }
     }
