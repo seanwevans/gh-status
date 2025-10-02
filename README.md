@@ -57,7 +57,9 @@ authentication or appropriate access, only public repositories will appear.
 The `ghstatus.sql` script defines a PostgreSQL function that retrieves the
 latest GitHub Actions workflow run for repositories owned by the provided
 usernames. It relies on the [`http` extension](https://github.com/pramsey/pgsql-http)
-to query the GitHub API directly from the database.
+to query the GitHub API directly from the database. Failed HTTP requests are
+logged as PostgreSQL NOTICEs and skipped so that one bad response does not stop
+the rest of the usernames from being processed.
 
 ### Usage
 
