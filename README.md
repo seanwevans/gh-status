@@ -35,7 +35,9 @@ make
 ### Usage
 
 Invoke the program with a GitHub username to show workflow status for that
-user's repositories. Optional flags allow customization of refresh timing and
+user's repositories. All repositories the authenticated GitHub CLI account can
+access (public, private, and internal) are requested. Optional flags allow
+customization of refresh timing and
 concurrency:
 
 ```sh
@@ -45,10 +47,10 @@ concurrency:
 `-p` sets the refresh interval in seconds (default 300) and `-c` limits the
 number of simultaneous fetches (default 32).
 
-The tool relies on the GitHub CLI for API requests. To access private
-repositories the CLI must be authenticated (`gh auth login`) and the account
-must have permission to view those repositories. Without authentication or
-appropriate access, private repository information cannot be displayed.
+The tool relies on the GitHub CLI for API requests. To include private or
+internal repositories in the results, ensure the CLI is authenticated
+(`gh auth login`) with an account that has permission to view them. Without
+authentication or appropriate access, only public repositories will appear.
 
 ## PL/pgSQL version
 

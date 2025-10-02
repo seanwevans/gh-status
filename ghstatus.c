@@ -91,7 +91,8 @@ void load_repos(const char *user) {
       close(devnull);
     }
 
-    execlp("gh", "gh", "repo", "list", user, "--public", "--limit", "500",
+    execlp("gh", "gh", "repo", "list", user, "--visibility", "all",
+           "--limit", "500",
            "--json", "nameWithOwner", "--jq", ".[].nameWithOwner",
            (char *)NULL);
     if (err != -1) {
