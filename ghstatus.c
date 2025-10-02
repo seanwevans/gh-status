@@ -1,6 +1,6 @@
 /*
  GitHub Actions Build Monitor
-   usage: ghstatus [-p seconds] [-c count] user1 [user2 [user3 [...]]]
+   usage: ghstatus [-p seconds>=1] [-c count>=1] user1 [user2 [user3 [...]]]
    build: gcc ghstatus.c -o ghstatus -lncursesw
 */
 
@@ -274,6 +274,19 @@ long long now_ms(void) {
   return (long long)ts.tv_sec * 1000LL + ts.tv_nsec / 1000000LL;
 }
 
+int sanitize_positive_option(const char *label, int value, int default_value,
+                             int warn) {
+  if (value < 1) {
+    if (warn) {
+      fprintf(stderr,
+              "Invalid %s (%d). Value must be at least 1. Using default %d.\n",
+              label, value, default_value);
+    }
+    return default_value;
+  }
+  return value;
+}
+
 int cmp_alpha(const void *a, const void *b) {
   int i = *(const int *)a;
   int j = *(const int *)b;
@@ -314,16 +327,22 @@ int main(int argc, char **argv) {
     case 'h':
     default:
       fprintf(stderr,
-              "Usage: %s [-p seconds] [-c count] <github-username> [user2 "
+              "Usage: %s [-p seconds>=1] [-c count>=1] <github-username> [user2 "
               "[user3 [...]]]\n",
               argv[0]);
       return 0;
     }
   }
 
+  poll_interval_s = sanitize_positive_option("poll interval", poll_interval_s,
+                                             POLL_INTERVAL_S, 1);
+  max_concurrent_fetches = sanitize_positive_option(
+      "max concurrent fetches", max_concurrent_fetches, MAX_CONCURRENT_FETCHES,
+      1);
+
   if (optind >= argc) {
     fprintf(stderr,
-            "Usage: %s [-p seconds] [-c count] <github-username> [user2 [user3 "
+            "Usage: %s [-p seconds>=1] [-c count>=1] <github-username> [user2 [user3 "
             "[...]]]\n",
             argv[0]);
     return 0;
