@@ -27,6 +27,7 @@
 char *REPOS[MAX_REPOS];
 int NUM_REPOS = 0;
 char STATUS[MAX_REPOS][64];
+int status_received[MAX_REPOS];
 const wchar_t spinner_chars[] = L"🌑🌒🌓🌔🌕🌖🌗🌘";
 
 typedef struct {
@@ -48,6 +49,7 @@ StatusEntry status_map[] = {
     {"stale", L"🥖", "Status: stale", 4},
     {"queued", L"📋", "Status: queued", 3},
     {"loading", L"🌀", "Status: loading", 3},
+    {"no_runs", L"🚫", "Status: no runs", 3},
     {NULL, L"➖", "Unknown status", 3},
 };
 
@@ -238,6 +240,7 @@ void spawn_fetches(int pipes[][2], pid_t pids[], int max_concurrent_fetches) {
       close(pipes[i][1]);
       fcntl(pipes[i][0], F_SETFL, O_NONBLOCK);
       strcpy(STATUS[i], "loading");
+      status_received[i] = 0;
       running++;
     } else {
       fprintf(stderr, "Failed to fork 'gh'. GitHub CLI is required.\n");
@@ -458,12 +461,16 @@ int main(int argc, char **argv) {
           buf[strcspn(buf, "\n")] = 0;
           strncpy(STATUS[i], buf, sizeof(STATUS[i]) - 1);
           STATUS[i][sizeof(STATUS[i]) - 1] = '\0';
+          status_received[i] = 1;
         } else if (n == 0) {
           close(pipes[i][0]);
           if (fetch_pids[i] > 0)
             waitpid(fetch_pids[i], NULL, 0);
           pipes[i][0] = -1;
           fetch_pids[i] = -1;
+          if (!status_received[i]) {
+            strcpy(STATUS[i], "no_runs");
+          }
         }
       }
     }
