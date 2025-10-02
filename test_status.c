@@ -14,5 +14,8 @@ int main(void) {
   assert(status_color("success") == 1);
   assert(status_color("failure") == 2);
   assert(status_color("unknown") == 3);
+
+  assert(sanitize_positive_option("test", 5, 10, 0) == 5);
+  assert(sanitize_positive_option("test", 0, 10, 0) == 10);
   return 0;
 }

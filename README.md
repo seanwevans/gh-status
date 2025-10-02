@@ -41,11 +41,11 @@ customization of refresh timing and
 concurrency:
 
 ```sh
-./ghstatus [-p seconds] [-c count] <user> [user2 ...]
+./ghstatus [-p seconds>=1] [-c count>=1] <user> [user2 ...]
 ```
 
-`-p` sets the refresh interval in seconds (default 300) and `-c` limits the
-number of simultaneous fetches (default 32).
+`-p` sets the refresh interval in seconds (default 300, minimum 1) and `-c`
+limits the number of simultaneous fetches (default 32, minimum 1).
 
 The tool relies on the GitHub CLI for API requests. To include private or
 internal repositories in the results, ensure the CLI is authenticated
