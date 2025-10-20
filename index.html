@@ -3,15 +3,416 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GitHub Actions Status</title>
+    <title>GitHub Actions Dashboard</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #0f172a;
+        --bg-panel: rgba(15, 23, 42, 0.8);
+        --bg-panel-light: rgba(15, 23, 42, 0.4);
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --border: rgba(148, 163, 184, 0.35);
+        --success: #22c55e;
+        --failure: #ef4444;
+        --cancelled: #a855f7;
+        --in-progress: #38bdf8;
+        --neutral: #facc15;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.1), transparent),
+          radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.15), transparent),
+          #020617;
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      header {
+        padding: 3rem 1.5rem 2rem;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+      }
+
+      header::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle, rgba(56, 189, 248, 0.2), transparent 60%);
+        opacity: 0.35;
+        pointer-events: none;
+      }
+
+      header h1 {
+        margin: 0 auto 0.75rem;
+        max-width: 20ch;
+        font-size: clamp(2rem, 4vw, 3rem);
+        letter-spacing: -0.02em;
+      }
+
+      header p {
+        margin: 0 auto;
+        max-width: 60ch;
+        color: var(--muted);
+        font-size: 1rem;
+        line-height: 1.6;
+      }
+
+      main {
+        flex: 1;
+        width: min(1100px, 90vw);
+        margin: 0 auto 3rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+      }
+
+      .panel {
+        background: var(--bg-panel);
+        border: 1px solid var(--border);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        backdrop-filter: blur(12px);
+        box-shadow: 0 30px 60px rgba(15, 23, 42, 0.35);
+      }
+
+      .controls {
+        display: grid;
+        gap: 1rem;
+      }
+
+      .controls form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: center;
+      }
+
+      label {
+        font-weight: 600;
+      }
+
+      input[type="text"] {
+        flex: 1 1 250px;
+        background: rgba(15, 23, 42, 0.65);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+        color: inherit;
+      }
+
+      input[type="text"]:focus {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+      }
+
+      button {
+        cursor: pointer;
+        border: none;
+        border-radius: 0.75rem;
+        padding: 0.75rem 1.5rem;
+        font-weight: 600;
+        font-size: 1rem;
+        color: #0f172a;
+        background: linear-gradient(135deg, #38bdf8, #22d3ee);
+        box-shadow: 0 20px 40px rgba(56, 189, 248, 0.35);
+        transition: transform 0.15s ease, box-shadow 0.2s ease;
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 25px 50px rgba(56, 189, 248, 0.45);
+      }
+
+      button:disabled {
+        opacity: 0.6;
+        cursor: progress;
+        transform: none;
+        box-shadow: none;
+      }
+
+      .hint {
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .message {
+        display: none;
+        padding: 1rem 1.25rem;
+        border-radius: 0.85rem;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        background: rgba(15, 23, 42, 0.6);
+        color: var(--muted);
+      }
+
+      .message.visible {
+        display: block;
+      }
+
+      .summary {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      }
+
+      .summary-card {
+        padding: 1rem;
+        border-radius: 0.9rem;
+        background: var(--bg-panel-light);
+        border: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+      }
+
+      .summary-card span.value {
+        font-size: 1.75rem;
+        font-weight: 700;
+      }
+
+      .repos-grid {
+        display: grid;
+        gap: 1.5rem;
+      }
+
+      .repo-card {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .repo-card header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        position: relative;
+        padding: 0;
+        text-align: left;
+      }
+
+      .repo-card header::after {
+        display: none;
+      }
+
+      .repo-name {
+        font-size: 1.2rem;
+        font-weight: 600;
+        margin: 0;
+      }
+
+      .latest-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .latest-status .status-icon {
+        font-size: 1.3rem;
+      }
+
+      .timeline {
+        display: flex;
+        gap: 0.35rem;
+        flex-wrap: wrap;
+      }
+
+      .timeline button {
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid transparent;
+        border-radius: 0.6rem;
+        padding: 0.35rem 0.6rem;
+        color: inherit;
+        font-size: 0.85rem;
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        box-shadow: none;
+        transition: transform 0.1s ease, border-color 0.2s ease;
+      }
+
+      .timeline button .dot {
+        width: 0.65rem;
+        height: 0.65rem;
+        border-radius: 50%;
+        background: currentColor;
+        box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.75);
+      }
+
+      .timeline button:hover,
+      .timeline button:focus {
+        transform: translateY(-1px) scale(1.02);
+        border-color: rgba(148, 163, 184, 0.45);
+        outline: none;
+      }
+
+      .timeline button.active {
+        border-color: currentColor;
+      }
+
+      .run-details {
+        display: grid;
+        gap: 0.75rem;
+        background: rgba(15, 23, 42, 0.55);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 0.85rem;
+        padding: 0.9rem 1rem;
+      }
+
+      .run-details h4 {
+        margin: 0;
+        font-size: 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      .run-details a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      .run-details table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+      }
+
+      .run-details th,
+      .run-details td {
+        padding: 0.35rem 0.5rem;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+        text-align: left;
+      }
+
+      .run-details tbody tr:last-child td {
+        border-bottom: none;
+      }
+
+      .job-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+      }
+
+      .job-status .status-dot {
+        width: 0.55rem;
+        height: 0.55rem;
+        border-radius: 50%;
+      }
+
+      .placeholder {
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .terminal-section {
+        display: grid;
+        gap: 1rem;
+      }
+
+      .terminal-section video {
+        width: 100%;
+        border-radius: 0.75rem;
+        border: 1px solid var(--border);
+      }
+
+      footer {
+        text-align: center;
+        color: var(--muted);
+        padding: 2rem 1rem;
+        font-size: 0.85rem;
+      }
+
+      @media (max-width: 680px) {
+        header {
+          padding-top: 2.5rem;
+        }
+
+        .run-details table {
+          font-size: 0.85rem;
+        }
+
+        .timeline {
+          gap: 0.25rem;
+        }
+
+        .timeline button {
+          font-size: 0.8rem;
+          padding: 0.3rem 0.5rem;
+        }
+      }
+    </style>
   </head>
   <body>
-    <h1>GitHub Actions Status</h1>
-    <p>Enter GitHub usernames separated by spaces:</p>
-    <label for="users">GitHub usernames:</label>
-    <input id="users" type="text" value="torvalds" autocomplete="off" />
-    <button id="load">Load</button>
-    <ul id="results"></ul>
+    <header>
+      <h1>GitHub Actions Build Dashboard</h1>
+      <p>
+        Explore workflow health across repositories with interactive timelines,
+        job duration analytics, and a retro terminal feed. Enter GitHub usernames
+        below to assemble a personalized build observatory.
+      </p>
+    </header>
+    <main>
+      <section class="panel controls" aria-labelledby="controls-heading">
+        <form id="user-form">
+          <label id="controls-heading" for="users">GitHub usernames</label>
+          <input
+            id="users"
+            type="text"
+            value="torvalds"
+            autocomplete="off"
+            placeholder="octocat hubot ..."
+          />
+          <button id="load" type="submit">Load dashboard</button>
+        </form>
+        <p class="hint">
+          Tip: separate multiple usernames with spaces. Public repositories are
+          always accessible &mdash; authenticate with a GitHub token to inspect
+          private runs and raise API rate limits.
+        </p>
+      </section>
+
+      <div id="message" class="message" role="status" aria-live="polite"></div>
+
+      <section id="summary" class="panel summary" hidden></section>
+
+      <section id="repos" class="panel repos-grid" aria-live="polite"></section>
+
+      <section class="panel terminal-section" aria-labelledby="terminal-heading">
+        <h2 id="terminal-heading">Terminal throwback</h2>
+        <p>
+          Prefer a retro vibe? Compile <code>ghstatus.c</code> to launch the
+          ncurses interface. It streams the same data as this dashboard with bold
+          text-mode energy.
+        </p>
+        <video controls muted loop preload="metadata">
+          <source src="sample_run.mp4" type="video/mp4" />
+          Your browser does not support the embedded video. Download
+          <a href="sample_run.mp4">sample_run.mp4</a> to preview the terminal
+          interface.
+        </video>
+      </section>
+    </main>
+    <footer>
+      Open source prototype. GitHub API responses subject to rate limits and
+      repository visibility.
+    </footer>
     <script src="ghstatus.js"></script>
   </body>
 </html>
