@@ -1,7 +1,7 @@
 # GitHub Actions Build Monitor
+<img width="256" alt="Minimalist Green Battery Icon" src="https://github.com/user-attachments/assets/4f512601-8ad3-45a7-bb81-5f4e4d92f277" />
 
 ## What it is
-
 a github actions build monitor
 
 https://github.com/user-attachments/assets/879a2730-b4ae-4862-93a5-d5c3f6ed00ba
