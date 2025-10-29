@@ -7,6 +7,7 @@
 #define _GNU_SOURCE
 
 #include <errno.h>
+#include <ctype.h>
 #include <fcntl.h>
 #include <locale.h>
 #include <ncursesw/ncurses.h>
@@ -16,6 +17,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
+#include <sys/select.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -29,6 +32,7 @@
 char *REPOS[MAX_REPOS];
 int NUM_REPOS = 0;
 char STATUS[MAX_REPOS][64];
+static char status_buf[MAX_REPOS][128];
 int status_received[MAX_REPOS];
 const wchar_t spinner_chars[] = L"🌑🌒🌓🌔🌕🌖🌗🌘";
 
@@ -250,6 +254,7 @@ void spawn_fetches(int pipes[][2], pid_t pids[], int max_concurrent_fetches) {
         status_changed = true;
         status_received[i] = 0;
       }
+      status_buf[i][0] = '\0';
       running++;
     } else {
       fprintf(stderr, "Failed to fork 'gh'. GitHub CLI is required.\n");
