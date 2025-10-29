@@ -28,6 +28,7 @@
 char *REPOS[MAX_REPOS];
 int NUM_REPOS = 0;
 char STATUS[MAX_REPOS][64];
+static char status_buf[MAX_REPOS][128];
 int status_received[MAX_REPOS];
 const wchar_t spinner_chars[] = L"🌑🌒🌓🌔🌕🌖🌗🌘";
 
@@ -249,6 +250,7 @@ void spawn_fetches(int pipes[][2], pid_t pids[], int max_concurrent_fetches) {
         status_changed = true;
         status_received[i] = 0;
       }
+      status_buf[i][0] = '\0';
       running++;
     } else {
       fprintf(stderr, "Failed to fork 'gh'. GitHub CLI is required.\n");
@@ -467,18 +469,41 @@ int main(int argc, char **argv) {
     for (int i = 0; i < NUM_REPOS; i++) {
       if (pipes[i][0] != -1 && FD_ISSET(pipes[i][0], &readfds)) {
         char buf[128];
-        int n = read(pipes[i][0], buf, sizeof(buf) - 1);
+        ssize_t n = read(pipes[i][0], buf, sizeof(buf));
         if (n > 0) {
-          buf[n] = '\0';
-          buf[strcspn(buf, "\n")] = 0;
-
-          if (strncmp(STATUS[i], buf, sizeof(STATUS[i])) != 0) {
-            strncpy(STATUS[i], buf, sizeof(STATUS[i]) - 1);
-            STATUS[i][sizeof(STATUS[i]) - 1] = '\0';
-            status_received[i] = 1;
-            updated_status = true;
+          size_t cur_len = strnlen(status_buf[i], sizeof(status_buf[i]));
+          for (ssize_t j = 0; j < n; j++) {
+            unsigned char ch = (unsigned char)buf[j];
+            if (ch == '\n') {
+              if (cur_len >= sizeof(status_buf[i]))
+                cur_len = sizeof(status_buf[i]) - 1;
+              status_buf[i][cur_len] = '\0';
+              if (strncmp(STATUS[i], status_buf[i], sizeof(STATUS[i])) != 0) {
+                strncpy(STATUS[i], status_buf[i], sizeof(STATUS[i]) - 1);
+                STATUS[i][sizeof(STATUS[i]) - 1] = '\0';
+                status_received[i] = 1;
+                updated_status = true;
+              }
+              cur_len = 0;
+              status_buf[i][0] = '\0';
+            } else if (cur_len < sizeof(status_buf[i]) - 1) {
+              status_buf[i][cur_len++] = (char)ch;
+              status_buf[i][cur_len] = '\0';
+            }
           }
         } else if (n == 0) {
+          if (status_buf[i][0] != '\0') {
+            char line_buf[sizeof(STATUS[i])];
+            strncpy(line_buf, status_buf[i], sizeof(line_buf) - 1);
+            line_buf[sizeof(line_buf) - 1] = '\0';
+            if (strncmp(STATUS[i], line_buf, sizeof(STATUS[i])) != 0) {
+              strncpy(STATUS[i], line_buf, sizeof(STATUS[i]) - 1);
+              STATUS[i][sizeof(STATUS[i]) - 1] = '\0';
+              status_received[i] = 1;
+              updated_status = true;
+            }
+          }
+          status_buf[i][0] = '\0';
           close(pipes[i][0]);
           if (fetch_pids[i] > 0)
             waitpid(fetch_pids[i], NULL, 0);
