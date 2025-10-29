@@ -6,15 +6,16 @@
 
 #define _GNU_SOURCE
 
+#include <errno.h>
 #include <fcntl.h>
 #include <locale.h>
 #include <ncursesw/ncurses.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/select.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -450,43 +451,61 @@ int main(int argc, char **argv) {
     if (cols_fit < 1)
       cols_fit = 1;
 
-    fd_set readfds;
-    FD_ZERO(&readfds);
-    int maxfd = -1;
+    struct pollfd pollfds[MAX_REPOS];
+    int poll_index[MAX_REPOS];
+    nfds_t poll_count = 0;
     for (int i = 0; i < NUM_REPOS; i++) {
       if (pipes[i][0] != -1) {
-        FD_SET(pipes[i][0], &readfds);
-        if (pipes[i][0] > maxfd)
-          maxfd = pipes[i][0];
+        pollfds[poll_count].fd = pipes[i][0];
+        pollfds[poll_count].events = POLLIN;
+        pollfds[poll_count].revents = 0;
+        poll_index[poll_count] = i;
+        poll_count++;
       }
     }
-    struct timeval tv = {0, 100000}; // 100ms
-    select(maxfd + 1, &readfds, NULL, NULL, &tv);
+
+    const int poll_timeout_ms = 100;
+    int poll_result = 0;
+    if (poll_count > 0) {
+      poll_result = poll(pollfds, poll_count, poll_timeout_ms);
+      if (poll_result < 0) {
+        if (errno == EINTR)
+          continue;
+        // Unexpected error; skip processing this cycle.
+        continue;
+      }
+    } else {
+      poll_result = poll(NULL, 0, poll_timeout_ms);
+      if (poll_result < 0 && errno != EINTR)
+        continue;
+    }
 
     bool updated_status = false;
-    for (int i = 0; i < NUM_REPOS; i++) {
-      if (pipes[i][0] != -1 && FD_ISSET(pipes[i][0], &readfds)) {
-        char buf[128];
-        int n = read(pipes[i][0], buf, sizeof(buf) - 1);
-        if (n > 0) {
-          buf[n] = '\0';
-          buf[strcspn(buf, "\n")] = 0;
+    for (nfds_t pi = 0; pi < poll_count; ++pi) {
+      if (!(pollfds[pi].revents & (POLLIN | POLLHUP | POLLERR)))
+        continue;
 
-          if (strncmp(STATUS[i], buf, sizeof(STATUS[i])) != 0) {
-            strncpy(STATUS[i], buf, sizeof(STATUS[i]) - 1);
-            STATUS[i][sizeof(STATUS[i]) - 1] = '\0';
-            status_received[i] = 1;
-            updated_status = true;
-          }
-        } else if (n == 0) {
-          close(pipes[i][0]);
-          if (fetch_pids[i] > 0)
-            waitpid(fetch_pids[i], NULL, 0);
-          pipes[i][0] = -1;
-          fetch_pids[i] = -1;
-          if (!status_received[i]) {
-            strcpy(STATUS[i], "no_runs");
-          }
+      int i = poll_index[pi];
+      char buf[128];
+      int n = read(pipes[i][0], buf, sizeof(buf) - 1);
+      if (n > 0) {
+        buf[n] = '\0';
+        buf[strcspn(buf, "\n")] = 0;
+
+        if (strncmp(STATUS[i], buf, sizeof(STATUS[i])) != 0) {
+          strncpy(STATUS[i], buf, sizeof(STATUS[i]) - 1);
+          STATUS[i][sizeof(STATUS[i]) - 1] = '\0';
+          status_received[i] = 1;
+          updated_status = true;
+        }
+      } else if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {
+        close(pipes[i][0]);
+        if (fetch_pids[i] > 0)
+          waitpid(fetch_pids[i], NULL, 0);
+        pipes[i][0] = -1;
+        fetch_pids[i] = -1;
+        if (!status_received[i]) {
+          strcpy(STATUS[i], "no_runs");
         }
       }
     }
