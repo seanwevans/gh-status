@@ -6,6 +6,7 @@
 
 #define _GNU_SOURCE
 
+#include <ctype.h>
 #include <fcntl.h>
 #include <locale.h>
 #include <ncursesw/ncurses.h>
@@ -14,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/select.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -472,11 +474,28 @@ int main(int argc, char **argv) {
           buf[n] = '\0';
           buf[strcspn(buf, "\n")] = 0;
 
-          if (strncmp(STATUS[i], buf, sizeof(STATUS[i])) != 0) {
-            strncpy(STATUS[i], buf, sizeof(STATUS[i]) - 1);
+          char *start = buf;
+          while (*start && isspace((unsigned char)*start))
+            start++;
+
+          char *end = start + strlen(start);
+          while (end > start && isspace((unsigned char)*(end - 1)))
+            end--;
+          *end = '\0';
+
+          const char *value = start;
+          if (strcmp(value, "\"\"") == 0 || value[0] == '\0' ||
+              strcasecmp(value, "null") == 0) {
+            value = "no_runs";
+          }
+
+          if (strncmp(STATUS[i], value, sizeof(STATUS[i])) != 0) {
+            strncpy(STATUS[i], value, sizeof(STATUS[i]) - 1);
             STATUS[i][sizeof(STATUS[i]) - 1] = '\0';
             status_received[i] = 1;
             updated_status = true;
+          } else if (strcmp(value, "no_runs") == 0) {
+            status_received[i] = 1;
           }
         } else if (n == 0) {
           close(pipes[i][0]);
