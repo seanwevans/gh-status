@@ -6,6 +6,7 @@
 
 #define _GNU_SOURCE
 
+#include <ctype.h>
 #include <fcntl.h>
 #include <locale.h>
 #include <ncursesw/ncurses.h>
@@ -14,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/select.h>
 #include <sys/wait.h>
 #include <time.h>
