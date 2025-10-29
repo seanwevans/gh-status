@@ -44,8 +44,11 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-let CONCURRENCY_LIMIT = window.CONCURRENCY_LIMIT || 5;
-window.CONCURRENCY_LIMIT = CONCURRENCY_LIMIT;
+let CONCURRENCY_LIMIT = 5;
+if (typeof window !== "undefined") {
+  CONCURRENCY_LIMIT = window.CONCURRENCY_LIMIT || CONCURRENCY_LIMIT;
+  window.CONCURRENCY_LIMIT = CONCURRENCY_LIMIT;
+}
 
 function limitConcurrency(limit) {
   let active = 0;
@@ -493,6 +496,13 @@ function accumulateSummary(runs) {
     if (key === "in_progress" || key === "queued") {
       summaryState.inProgress += 1;
     }
+
+    const status = (run.status || "").toLowerCase();
+    const hasConclusion = run.conclusion != null;
+    if (status !== "completed" && !hasConclusion) {
+      return;
+    }
+
     const started = run.created_at ? new Date(run.created_at) : null;
     const completed = run.updated_at ? new Date(run.updated_at) : null;
     if (started && completed && completed >= started) {
@@ -667,17 +677,27 @@ async function load(event) {
   form.classList.remove("loading");
 }
 
-document.getElementById("user-form").addEventListener("submit", load);
-document.getElementById("load").addEventListener("click", load);
+if (typeof document !== "undefined") {
+  document.getElementById("user-form").addEventListener("submit", load);
+  document.getElementById("load").addEventListener("click", load);
 
-document.getElementById("users").addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && !event.shiftKey) {
-    event.preventDefault();
-    load(event);
-  }
-});
+  document.getElementById("users").addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      load(event);
+    }
+  });
 
-// Auto-load the default example when the page is first opened.
-window.addEventListener("DOMContentLoaded", () => {
-  load();
-});
+  // Auto-load the default example when the page is first opened.
+  window.addEventListener("DOMContentLoaded", () => {
+    load();
+  });
+}
+
+if (typeof module !== "undefined") {
+  module.exports = {
+    accumulateSummary,
+    resetSummary,
+    summaryState,
+  };
+}
