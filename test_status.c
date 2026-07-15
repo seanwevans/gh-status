@@ -17,6 +17,11 @@ int main(void) {
   assert(status_color("no_runs") == 3);
   assert(status_color("unknown") == 3);
 
+  assert(sort_mode == SORT_STATUS);
+  assert(status_rank("success") < status_rank("failure"));
+  assert(status_rank("failure") < status_rank("queued"));
+  assert(status_rank("unknown") == (int)STATUS_KNOWN);
+
   assert(sanitize_positive_option("test", 5, 10, 0) == 5);
   assert(sanitize_positive_option("test", 0, 10, 0) == 10);
   return 0;

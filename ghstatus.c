@@ -63,7 +63,7 @@ StatusEntry status_map[] = {
 #define STATUS_KNOWN (STATUS_COUNT - 1)
 
 typedef enum { SORT_DEFAULT, SORT_ALPHA, SORT_STATUS } SortMode;
-SortMode sort_mode = SORT_DEFAULT;
+SortMode sort_mode = SORT_STATUS;
 
 int ORIGINAL_INDEX[MAX_REPOS]; // for restoring original order
 int order[MAX_REPOS];          // active display order
@@ -314,10 +314,20 @@ int cmp_alpha(const void *a, const void *b) {
   return strcmp(REPOS[i], REPOS[j]);
 }
 
+int status_rank(const char *status) {
+  for (size_t i = 0; i < STATUS_KNOWN; i++) {
+    if (status && strstr(status, status_map[i].match))
+      return (int)i;
+  }
+  return (int)STATUS_KNOWN;
+}
+
 int cmp_status(const void *a, const void *b) {
   int i = *(const int *)a;
   int j = *(const int *)b;
-  int c = strcmp(STATUS[i], STATUS[j]);
+  int c = status_rank(STATUS[i]) - status_rank(STATUS[j]);
+  if (c == 0)
+    c = strcmp(STATUS[i], STATUS[j]);
   if (c == 0)
     return strcmp(REPOS[i], REPOS[j]); // tie-break
   return c;
@@ -382,6 +392,7 @@ int main(int argc, char **argv) {
     ORIGINAL_INDEX[i] = i;
     order[i] = i;
   }
+  apply_sort();
 
   for (int i = 0; i < MAX_REPOS; i++) {
     pipes[i][0] = pipes[i][1] = -1;
@@ -658,12 +669,12 @@ int main(int argc, char **argv) {
       last_poll = time(NULL);
     }
     if (ch == 's' || ch == 'S') {
-      if (sort_mode == SORT_DEFAULT) {
-        sort_mode = SORT_ALPHA;
-      } else if (sort_mode == SORT_ALPHA) {
-        sort_mode = SORT_STATUS;
-      } else {
+      if (sort_mode == SORT_STATUS) {
         sort_mode = SORT_DEFAULT;
+      } else if (sort_mode == SORT_DEFAULT) {
+        sort_mode = SORT_ALPHA;
+      } else {
+        sort_mode = SORT_STATUS;
       }
       apply_sort();
     }
@@ -683,12 +694,12 @@ int main(int argc, char **argv) {
                 last_poll = time(NULL);
               }
             } else if (ev.x >= s_col_start && ev.x <= s_col_end) {
-              if (sort_mode == SORT_DEFAULT)
-                sort_mode = SORT_ALPHA;
-              else if (sort_mode == SORT_ALPHA)
-                sort_mode = SORT_STATUS;
-              else
+              if (sort_mode == SORT_STATUS)
                 sort_mode = SORT_DEFAULT;
+              else if (sort_mode == SORT_DEFAULT)
+                sort_mode = SORT_ALPHA;
+              else
+                sort_mode = SORT_STATUS;
               apply_sort();
             }
           }
