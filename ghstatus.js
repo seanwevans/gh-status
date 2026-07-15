@@ -34,6 +34,10 @@ const statusColors = {
 
 const RUN_HISTORY_LIMIT = 12;
 const runJobsCache = new Map();
+const STATUS_ORDER = statusMap.reduce((order, entry, index) => {
+  if (entry.match) order[entry.match] = index;
+  return order;
+}, {});
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -170,6 +174,30 @@ function summariseRunStatus(run) {
   const statusKey = getRunStatusKey(run);
   const { label } = getStatusDetails(statusKey);
   return label.replace(/^Conclusion: |^Status: /i, "");
+}
+
+function getStatusRank(status) {
+  const details = getStatusDetails(status);
+  return details.match &&
+    Object.prototype.hasOwnProperty.call(STATUS_ORDER, details.match)
+    ? STATUS_ORDER[details.match]
+    : statusMap.length - 1;
+}
+
+function compareReposByStatus(a, b) {
+  const statusComparison =
+    getStatusRank(a.status) - getStatusRank(b.status) ||
+    String(a.status || "").localeCompare(String(b.status || ""), undefined, {
+      sensitivity: "base",
+    });
+  if (statusComparison !== 0) return statusComparison;
+  return a.repo.localeCompare(b.repo, undefined, { sensitivity: "base" });
+}
+
+function sortRepoCardsByStatus(repoStates, container) {
+  [...repoStates.values()].sort(compareReposByStatus).forEach(({ card }) => {
+    container.appendChild(card);
+  });
 }
 
 async function fetchRepos(user) {
@@ -625,9 +653,11 @@ async function load(event) {
   }
 
   const limiter = limitConcurrency(CONCURRENCY_LIMIT);
+  const repoStates = new Map();
 
   const fetchTasks = repos.map((repo) => {
     const card = createRepoCard(repo);
+    repoStates.set(repo, { repo, card, status: "loading" });
     repoContainer.appendChild(card);
 
     return limiter(async () => {
@@ -641,6 +671,8 @@ async function load(event) {
           "⚠️ GitHub API rate limit reached while fetching workflow runs.",
           "error",
         );
+        repoStates.get(repo).status = "rate_limit";
+        sortRepoCardsByStatus(repoStates, repoContainer);
         return;
       }
       if (error) {
@@ -648,6 +680,8 @@ async function load(event) {
           "<span class=\"placeholder\">Unable to load workflow history.</span>";
         card.querySelector(".run-details").innerHTML =
           "<span class=\"placeholder\">Run details unavailable.</span>";
+        repoStates.get(repo).status = "error";
+        sortRepoCardsByStatus(repoStates, repoContainer);
         return;
       }
 
@@ -657,6 +691,8 @@ async function load(event) {
       accumulateSummary(sortedRuns);
       renderTimeline(card, repo, sortedRuns);
       updateRepoHeader(card, sortedRuns[0]);
+      repoStates.get(repo).status = getRunStatusKey(sortedRuns[0]);
+      sortRepoCardsByStatus(repoStates, repoContainer);
       renderSummaryPanel();
     });
   });
