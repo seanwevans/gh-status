@@ -140,9 +140,8 @@ void load_repos(const char *user) {
       close(devnull);
     }
 
-    execlp("gh", "gh", "repo", "list", user, "--limit",
-           "500", "--json", "nameWithOwner", "--jq", ".[].nameWithOwner",
-           (char *)NULL);
+    execlp("gh", "gh", "repo", "list", user, "--limit", "500", "--json",
+           "nameWithOwner", "--jq", ".[].nameWithOwner", (char *)NULL);
     if (err != -1) {
       dup2(err, STDERR_FILENO);
       close(err);
