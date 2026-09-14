@@ -140,7 +140,7 @@ void load_repos(const char *user) {
       close(devnull);
     }
 
-    execlp("gh", "gh", "repo", "list", user, "--visibility", "all", "--limit",
+    execlp("gh", "gh", "repo", "list", user, "--limit",
            "500", "--json", "nameWithOwner", "--jq", ".[].nameWithOwner",
            (char *)NULL);
     if (err != -1) {
@@ -1209,6 +1209,8 @@ int sanitize_positive_option(const char *label, int value, int default_value,
 int cmp_alpha(const void *a, const void *b) {
   int i = *(const int *)a;
   int j = *(const int *)b;
+  if (!REPOS[i] || !REPOS[j])
+    return (!REPOS[i]) - (!REPOS[j]);
   return strcmp(REPOS[i], REPOS[j]);
 }
 
@@ -1327,6 +1329,7 @@ int main(int argc, char **argv) {
   for (int i = 0; i < NUM_REPOS; i++) {
     ORIGINAL_INDEX[i] = i;
     order[i] = i;
+    strcpy(STATUS[i], "loading");
   }
   apply_sort();
 
